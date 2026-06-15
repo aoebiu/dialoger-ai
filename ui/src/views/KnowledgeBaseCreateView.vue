@@ -86,6 +86,33 @@
                 </label>
               </div>
             </div>
+            <div class="form-field-row">
+              <div class="form-field">
+                <label class="form-label">检索数量（TopK）</label>
+                <input
+                  v-model.number="form.topK"
+                  type="number"
+                  class="form-input"
+                  placeholder="默认为 3"
+                  min="1"
+                  max="100"
+                />
+                <span class="form-field-hint">返回最相似的 K 个文本分段</span>
+              </div>
+              <div class="form-field">
+                <label class="form-label">相似度阈值（Score）</label>
+                <input
+                  v-model.number="form.score"
+                  type="number"
+                  class="form-input"
+                  placeholder="默认为 0.7"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                />
+                <span class="form-field-hint">仅返回分数高于此阈值的分段（0~1）</span>
+              </div>
+            </div>
             <p v-if="step1Error" class="form-error">{{ step1Error }}</p>
             <div class="form-actions">
               <button type="button" class="btn-secondary" @click="cancelWizard">取消</button>
@@ -441,6 +468,8 @@ const form = ref({
   name: '',
   description: '',
   visibility: 'private' as 'private' | 'public',
+  topK: 3 as number | null,
+  score: 0.7 as number | null,
 })
 
 interface PendingFile {
@@ -554,6 +583,8 @@ onMounted(async () => {
         form.value.name = res.data.name
         form.value.description = res.data.description || ''
         form.value.visibility = (res.data.visibility === 'public' ? 'public' : 'private')
+        form.value.topK = res.data.topK ?? 3
+        form.value.score = res.data.score ?? 0.7
       }
     } catch {
       // ignore
@@ -572,6 +603,8 @@ async function goToStep2() {
     name: form.value.name.trim(),
     description: form.value.description.trim() || undefined,
     visibility: form.value.visibility,
+    topK: form.value.topK ?? undefined,
+    score: form.value.score ?? undefined,
   }
   try {
     if (kbId.value) {
@@ -1085,6 +1118,18 @@ function formatFileSize(size: number): string {
 .form-textarea {
   resize: vertical;
   min-height: 6rem;
+}
+
+.form-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.form-field-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+  margin-top: 0.125rem;
 }
 
 /* 可见范围单选 */

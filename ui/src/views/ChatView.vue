@@ -2,7 +2,7 @@
   <div class="chat-page">
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h1 class="title">AI Talk</h1>
+        <h1 class="title">Dialoger AI</h1>
         <button type="button" class="new-chat-btn" @click="handleNewChat">
           {{ creating ? '创建中…' : '+ 新建对话' }}
         </button>

@@ -35,6 +35,16 @@ public class KnowledgeBase {
     /** 当前知识库构建任务 ID（async_task.task_id） */
     private String buildTaskId;
 
+    /**
+     * 返回最相似的 K 个文本分段
+     */
+    private Integer topK;
+
+    /**
+     * 只返回相似度分数高于此阈值的文本分段
+     */
+    private Double score;
+
     private Integer deleted;
 
     @TableField(fill = FieldFill.INSERT)

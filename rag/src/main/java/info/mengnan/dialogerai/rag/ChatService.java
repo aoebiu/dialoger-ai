@@ -1,10 +1,8 @@
 package info.mengnan.dialogerai.rag;
 
-import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.moderation.DisabledModerationModel;
 import dev.langchain4j.model.moderation.ModerationModel;
@@ -16,26 +14,27 @@ import dev.langchain4j.rag.content.aggregator.DefaultContentAggregator;
 import dev.langchain4j.rag.content.aggregator.ReRankingContentAggregator;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
-import dev.langchain4j.store.embedding.EmbeddingStore;
-import info.mengnan.dialogerai.common.param.ModelType;
-import info.mengnan.dialogerai.rag.injector.CapturingContentInjector;
-import info.mengnan.dialogerai.rag.injector.RagSourceStore;
 import dev.langchain4j.rag.query.router.DefaultQueryRouter;
 import dev.langchain4j.rag.query.router.LanguageModelQueryRouter;
 import dev.langchain4j.rag.query.router.QueryRouter;
 import dev.langchain4j.rag.query.transformer.DefaultQueryTransformer;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.TokenStream;
-import dev.langchain4j.service.tool.ToolExecutor;
+import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
-import info.mengnan.dialogerai.kb.core.DynamicEmbeddingStoreRegistry;
-import info.mengnan.dialogerai.kb.core.KnowledgeBaseIndexResolver;
+import info.mengnan.dialogerai.common.param.ModelType;
 import info.mengnan.dialogerai.kb.core.KnowledgeBaseIndexResolver.KbIndexRef;
+import info.mengnan.dialogerai.kb.core.DynamicEmbeddingStoreRegistry;
 import info.mengnan.dialogerai.rag.config.ModelConfig;
-import info.mengnan.dialogerai.rag.handler.StreamingResponseHandler;
+import info.mengnan.dialogerai.rag.container.assemble.AiServiceAssembler;
 import info.mengnan.dialogerai.rag.container.assemble.AssembledModels;
 import info.mengnan.dialogerai.rag.container.factory.UniversalModelFactory;
-import info.mengnan.dialogerai.rag.service.ModelConfigProvider;
+import info.mengnan.dialogerai.rag.handler.StreamingResponseHandler;
+import info.mengnan.dialogerai.rag.injector.CapturingContentInjector;
+import dev.langchain4j.agent.tool.ToolSpecification;
+import dev.langchain4j.service.tool.ToolExecutor;
+import info.mengnan.dialogerai.rag.container.assemble.KbContext;
+import info.mengnan.dialogerai.rag.injector.RagSourceStore;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
@@ -50,22 +49,21 @@ import static info.mengnan.dialogerai.rag.constant.promptTemplate.PromptTemplate
 
 @Slf4j
 public class ChatService {
+
     private final ChatMemoryStore chatMemoryStore;
     private final UniversalModelFactory modelFactory;
     private final DynamicEmbeddingStoreRegistry embeddingStoreRegistry;
-    private final ModelConfigProvider modelConfigProvider;
     private final RagSourceStore ragSourceStore;
     private final Executor ragExecutor;
 
     public ChatService(ChatMemoryStore chatMemoryStore,
                        UniversalModelFactory modelFactory,
                        DynamicEmbeddingStoreRegistry embeddingStoreRegistry,
-                       ModelConfigProvider modelConfigProvider,
-                       RagSourceStore ragSourceStore, Executor ragExecutor) {
+                       RagSourceStore ragSourceStore,
+                       Executor ragExecutor) {
         this.chatMemoryStore = chatMemoryStore;
         this.modelFactory = modelFactory;
         this.embeddingStoreRegistry = embeddingStoreRegistry;
-        this.modelConfigProvider = modelConfigProvider;
         this.ragSourceStore = ragSourceStore;
         this.ragExecutor = ragExecutor;
     }
@@ -76,36 +74,33 @@ public class ChatService {
      * @param sessionId       会话id
      * @param message         消息
      * @param handler         流式响应处理器
-     * @param assembledModels 已组装好的模型配置
-     * @param toolMap         工具map
-     * @param kbIndexRefs     知识库索引list
      */
-    public void chatStreaming(Long memberId,
-                              String sessionId,
+    public void chatStreaming(String sessionId,
                               String message,
                               StreamingResponseHandler handler,
-                              AssembledModels assembledModels,
-                              Map<ToolSpecification, ToolExecutor> toolMap,
-                              List<KnowledgeBaseIndexResolver.KbIndexRef> kbIndexRefs) {
-        if (assembledModels == null) {
-            handler.onError(new IllegalArgumentException("AssembledModels cannot be null"));
-            return;
-        }
+                              AiServiceAssembler<?> aiServiceAssembler) {
+        AiServiceAssembler.AiComponents<?> aiComponents = aiServiceAssembler.assemble();
+        AssembledModels assembledModels = aiComponents.assembledModels();
+        Map<ModelType, ModelConfig> configs = assembledModels.getConfigs();
 
-        AssistantUnique assistantUnique = buildAssistantUnique(memberId, sessionId, assembledModels, toolMap, kbIndexRefs);
-
+        AssistantUnique assistantUnique = new AssistantUniqueBuilder()
+                .configureRag(assembledModels, aiComponents.kbContext(), sessionId, embeddingStoreRegistry)
+                .configureStreamingChatModel(configs.get(STREAMING_CHAT))
+                .configureChatModel(configs.get(CHAT))
+                .configureModerationModel(configs.get(MODERATION))
+                .configureTools(assembledModels.getTools(), aiComponents.toolMap())
+                .chatMemoryProvider(assembledModels)
+                .build();
         try {
             TokenStream tokenStream = assistantUnique.chatStreaming(sessionId, message);
-
             tokenStream.onPartialResponse(token -> {
                         if (!handler.isCancelled()) {
                             handler.onToken(token);
                         }
                     })
                     .onCompleteResponse(response -> {
-                        String completeText = response.aiMessage().text();
                         if (!handler.isCancelled()) {
-                            handler.onComplete(completeText);
+                            handler.onComplete(response.aiMessage().text());
                         }
                     })
                     .onError(error -> {
@@ -119,151 +114,142 @@ public class ChatService {
         }
     }
 
-    /**
-     * 根据配置动态构建 AssistantUnique
-     */
-    private AssistantUnique buildAssistantUnique(Long memberId, String sessionId, AssembledModels assembledModels,
-                                                 Map<ToolSpecification, ToolExecutor> toolMap,
-                                                 List<KnowledgeBaseIndexResolver.KbIndexRef> kbIndexRefs) {
-        AiServices<AssistantUnique> builder = AiServices.builder(AssistantUnique.class);
-        Map<ModelType, ModelConfig> modelConfigMap = modelConfigProvider.loadModelConfigs(memberId);
+    public class AssistantUniqueBuilder {
+        private final AiServices<AssistantUnique> aiServices;
 
-        if (assembledModels.rag()) {
+        private AssistantUniqueBuilder() {
+            aiServices = AiServices.builder(AssistantUnique.class);
+        }
+
+        private AssistantUniqueBuilder configureRag(AssembledModels assembledModels, List<? extends KbContext> kbContexts, String sessionId, DynamicEmbeddingStoreRegistry embeddingStoreRegistry) {
+            if (!assembledModels.getRag()) {
+                return this;
+            }
             DefaultRetrievalAugmentor.DefaultRetrievalAugmentorBuilder ragBuilder = DefaultRetrievalAugmentor.builder();
             ragBuilder.executor(ragExecutor);
 
-            if (assembledModels.contentAggregator()) {
-                ContentAggregator contentAggregator = null;
-
-                if (assembledModels.scoringModel() != null) {
-                    ModelConfig scoringConfig = modelConfigMap.get(SCORING);
-                    if (scoringConfig != null) {
-                        ScoringModel scoringModel = modelFactory.createScoringModel(scoringConfig);
-                        contentAggregator = ReRankingContentAggregator.builder()
-                                .scoringModel(scoringModel)
-                                .querySelector(queryToContents -> queryToContents.entrySet().iterator().next().getKey())
-                                .build();
-                    }
-                } else {
-                    contentAggregator = new DefaultContentAggregator();
-                }
-                ragBuilder.contentAggregator(contentAggregator);
+            if (assembledModels.getContentAggregator()) {
+                ragBuilder.contentAggregator(createContentAggregator(assembledModels.getConfigs().get(SCORING)));
             }
-
-            if (assembledModels.transform() != null) {
+            if (assembledModels.getTransform() != null) {
                 ragBuilder.queryTransformer(new DefaultQueryTransformer());
             }
 
-            Map<ContentRetriever, String> contentRetrieverMap = buildContentRetrieverMap(kbIndexRefs, modelConfigMap.get(EMBEDDING), assembledModels);
-            QueryRouter queryRouter;
-            if (contentRetrieverMap.isEmpty()) {
-                queryRouter = new DefaultQueryRouter();
-            } else if (assembledModels.chatModel() == null) {
-                queryRouter = new DefaultQueryRouter(contentRetrieverMap.keySet());
-            } else {
-                ModelConfig chatConfig = modelConfigMap.get(CHAT);
-
-                if (chatConfig != null) {
-                    ChatModel chatModel = modelFactory.createChatModel(chatConfig);
-                    queryRouter = new LanguageModelQueryRouter(chatModel, contentRetrieverMap,
-                            QUERY_ROUTER_PROMPT_TEMPLATE, DO_NOT_ROUTE);
-                } else {
-                    queryRouter = new DefaultQueryRouter(contentRetrieverMap.keySet());
-                }
-            }
-
-            ragBuilder.queryRouter(queryRouter);
+            ragBuilder.queryRouter(createQueryRouter(assembledModels.getConfigs(), kbContexts, embeddingStoreRegistry));
             ragBuilder.contentInjector(new CapturingContentInjector(sessionId, ragSourceStore));
-            builder.retrievalAugmentor(ragBuilder.build());
+            aiServices.retrievalAugmentor(ragBuilder.build());
+            return this;
         }
 
-        if (assembledModels.streamingChatModel() != null) {
-            ModelConfig streamingChatConfig = modelConfigMap.get(STREAMING_CHAT);
-            if (streamingChatConfig != null) {
-                StreamingChatModel streamingChatModel = modelFactory.createStreamingChatModel(streamingChatConfig);
-                builder.streamingChatModel(streamingChatModel);
+        private AssistantUniqueBuilder configureTools(boolean hasTools, Map<ToolSpecification, ToolExecutor> toolMap) {
+            if (hasTools) {
+                aiServices.tools(toolMap);
             }
+            return this;
         }
 
-        if (assembledModels.chatModel() != null) {
-            ModelConfig chatConfig = modelConfigMap.get(CHAT);
-            if (chatConfig != null) {
-                ChatModel chatModel = modelFactory.createChatModel(chatConfig);
-                builder.chatModel(chatModel);
+        private AssistantUniqueBuilder configureStreamingChatModel(ModelConfig streamingChatConfig) {
+            if (streamingChatConfig == null) {
+                return this;
             }
+            aiServices.streamingChatModel(modelFactory.createStreamingChatModel(streamingChatConfig));
+            return this;
         }
 
-        if (assembledModels.moderationModel() != null) {
-            ModelConfig moderationConfig = modelConfigMap.get(MODERATION);
-            if (moderationConfig != null) {
-                ModerationModel moderationModel = modelFactory.createModerationModel(moderationConfig);
-                builder.moderationModel(moderationModel);
-            } else {
-                builder.moderationModel(new DisabledModerationModel());
+        private AssistantUniqueBuilder configureChatModel(ModelConfig chatConfig) {
+            if (chatConfig == null) {
+                return this;
             }
-        } else {
-            builder.moderationModel(new DisabledModerationModel());
+            aiServices.chatModel(modelFactory.createChatModel(chatConfig));
+            return this;
         }
 
-        return builder
-                .tools(toolMap)
-                .chatMemoryProvider(memoryId -> MessageWindowChatMemory.builder()
-                        .id(memoryId)
-                        .maxMessages(assembledModels.maxMessages())
-                        .chatMemoryStore(assembledModels.inDB() ? chatMemoryStore : null)
-                        .build())
-                .build();
-    }
-
-    /**
-     * 构建 ContentRetriever Map
-     * 为每个 ES 索引动态创建 EmbeddingStore 和 ContentRetriever
-     */
-    public Map<ContentRetriever, String> buildContentRetrieverMap(List<KbIndexRef> kbIndexes,
-                                                                  ModelConfig embeddingConfig,
-                                                                  AssembledModels assembledModels) {
-        Map<ContentRetriever, String> map = new HashMap<>();
-
-        if (assembledModels.embeddingModel() == null) {
-            log.warn("No embedding model configured");
-            return map;
-        }
-        if (embeddingConfig == null) {
-            log.warn("Embedding model config not found in database: {}",
-                    assembledModels.embeddingModel().getModelName());
-            return map;
+        private AssistantUniqueBuilder configureModerationModel(ModelConfig moderationConfig) {
+            ModerationModel model = moderationConfig == null
+                    ? new DisabledModerationModel()
+                    : modelFactory.createModerationModel(moderationConfig);
+            aiServices.moderationModel(model);
+            return this;
         }
 
-        EmbeddingModel embeddingModel = modelFactory.createEmbeddingModel(embeddingConfig);
+        private ContentAggregator createContentAggregator(ModelConfig scoringConfig) {
+            if (scoringConfig == null) {
+                return new DefaultContentAggregator();
+            }
+            ScoringModel scoringModel = modelFactory.createScoringModel(scoringConfig);
+            return ReRankingContentAggregator.builder()
+                    .scoringModel(scoringModel)
+                    .querySelector(queryToContents -> queryToContents.entrySet().iterator().next().getKey())
+                    .build();
+        }
 
-        for (KbIndexRef kbIndex : kbIndexes) {
-            String indexName = kbIndex.indexName();
-            String kbName = kbIndex.displayName();
+        private MessageWindowChatMemory createChatMemory(Object memoryId, AssembledModels assembledModels) {
+            return MessageWindowChatMemory.builder()
+                    .id(memoryId)
+                    .maxMessages(assembledModels.getMaxMessages())
+                    .chatMemoryStore(assembledModels.getInDB() ? chatMemoryStore : null)
+                    .build();
+        }
+
+        private QueryRouter createQueryRouter(Map<ModelType, ModelConfig> configs,
+                                              List<? extends KbContext> kbContexts,
+                                              DynamicEmbeddingStoreRegistry embeddingStoreRegistry) {
+            EmbeddingModel embeddingModel = modelFactory.createEmbeddingModel(configs.get(EMBEDDING));
+            if (embeddingModel == null) {
+                log.warn("Failed to create embedding model");
+                return new DefaultQueryRouter();
+            }
+
+            Map<ContentRetriever, String> retrieverToKbName = kbContexts.stream()
+                    .flatMap(kbContext -> kbContext.kbIndexRefs().stream())
+                    .collect(
+                            HashMap::new,
+                            (map, ref) -> map.put(
+                                    createContentRetriever(ref, embeddingModel, embeddingStoreRegistry),
+                                    ref.displayName()
+                            ),
+                            HashMap::putAll
+                    );
+            if (retrieverToKbName.isEmpty()) {
+                return new DefaultQueryRouter();
+            }
+            ChatModel chatModel = modelFactory.createChatModel(configs.get(CHAT));
+            if (chatModel == null) {
+                return new DefaultQueryRouter(retrieverToKbName.keySet());
+            }
+            return new LanguageModelQueryRouter(chatModel, retrieverToKbName, QUERY_ROUTER_PROMPT_TEMPLATE, DO_NOT_ROUTE);
+        }
+
+        private ContentRetriever createContentRetriever(KbIndexRef ref, EmbeddingModel embeddingModel, DynamicEmbeddingStoreRegistry embeddingStoreRegistry) {
             try {
-                EmbeddingStore<TextSegment> embeddingStore = embeddingStoreRegistry.createEmbeddingStore(indexName);
-
+                EmbeddingStore<TextSegment> embeddingStore = embeddingStoreRegistry.createEmbeddingStore(ref.indexName());
                 ContentRetriever baseRetriever = EmbeddingStoreContentRetriever.builder()
+                        .maxResults(ref.topK())
+                        .minScore(ref.score())
                         .embeddingStore(embeddingStore)
                         .embeddingModel(embeddingModel)
-                        .maxResults(assembledModels.maxResults())
-                        .minScore(assembledModels.minScore())
                         .build();
-
-                ContentRetriever enrichedRetriever = query -> {
+                return query -> {
                     List<Content> contents = baseRetriever.retrieve(query);
                     contents.forEach(c -> {
-                        c.textSegment().metadata().put("indexName", indexName);
-                        c.textSegment().metadata().put("kbName", kbName);
+                        c.textSegment().metadata().put("indexName", ref.indexName());
+                        c.textSegment().metadata().put("kbName", ref.displayName());
                     });
                     return contents;
                 };
-
-                map.put(enrichedRetriever, kbName);
             } catch (Exception e) {
-                log.error("Failed to create ContentRetriever for kb: {}", kbName, e);
+                log.error("Failed to create ContentRetriever for kb: {}", ref.displayName(), e);
+                return null;
             }
         }
-        return map;
-    }
 
+        public AssistantUniqueBuilder chatMemoryProvider(AssembledModels assembledModels) {
+            aiServices.chatMemoryProvider(memoryId -> createChatMemory(memoryId, assembledModels));
+            return this;
+        }
+
+        public AssistantUnique build() {
+            return aiServices.build();
+        }
+    }
 }

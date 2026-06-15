@@ -43,16 +43,6 @@ public class ChatOptionConfig {
     private String contentInjectorPrompt;
 
     /**
-     * 最大检索结果数
-     */
-    private Integer maxResults;
-
-    /**
-     * 最小相似度分数
-     */
-    private Double minScore;
-
-    /**
      * 是否存储在数据库
      */
     private Boolean inDB;

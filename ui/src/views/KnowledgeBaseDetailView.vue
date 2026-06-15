@@ -21,40 +21,142 @@
         </div>
         <div class="kb-page-header-actions">
           <button type="button" class="primary-action-btn" @click="goToUpload">上传文档</button>
+          <button type="button" class="refresh-btn" @click="openEditModal">编辑</button>
           <button type="button" class="refresh-btn" :disabled="loadingDocs" @click="loadDocuments">
             {{ loadingDocs ? '刷新中…' : '刷新' }}
           </button>
         </div>
       </header>
 
-      <!-- 标签 -->
-      <nav class="kb-tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          class="kb-tab"
-          :class="{ active: activeTab === 'info' }"
-          :aria-selected="activeTab === 'info'"
-          @click="setTab('info')"
-        >
-          基础信息
-        </button>
-        <button
-          type="button"
-          role="tab"
-          class="kb-tab"
-          :class="{ active: activeTab === 'docs' }"
-          :aria-selected="activeTab === 'docs'"
-          @click="setTab('docs')"
-        >
-          文档列表
-        </button>
-      </nav>
+      <!-- 编辑弹窗 -->
+      <div v-if="editModalOpen" class="kb-modal-mask" @click.self="closeEditModal">
+        <div class="kb-modal">
+          <h3 class="kb-modal-title">编辑知识库</h3>
+          <form class="kb-edit-form" @submit.prevent="submitEdit">
+            <div class="kb-form-row">
+              <label class="kb-form-label" for="edit-name">名称</label>
+              <input
+                id="edit-name"
+                v-model="editForm.name"
+                class="kb-form-input"
+                type="text"
+                maxlength="100"
+                placeholder="知识库名称"
+                required
+              />
+            </div>
+            <div class="kb-form-row">
+              <label class="kb-form-label" for="edit-visibility">可见范围</label>
+              <select id="edit-visibility" v-model="editForm.visibility" class="kb-form-input">
+                <option value="private">私有（仅自己可见）</option>
+                <option value="public">公开（所有人可见）</option>
+              </select>
+            </div>
+            <div class="kb-form-row kb-form-row-full">
+              <label class="kb-form-label" for="edit-desc">描述</label>
+              <textarea
+                id="edit-desc"
+                v-model="editForm.description"
+                class="kb-form-input kb-form-textarea"
+                rows="3"
+                maxlength="500"
+                placeholder="可选"
+              />
+            </div>
+            <div class="kb-form-row">
+              <label class="kb-form-label" for="edit-topk">TopK</label>
+              <div>
+                <input
+                  id="edit-topk"
+                  v-model.number="editForm.topK"
+                  class="kb-form-input"
+                  type="number"
+                  min="1"
+                  max="100"
+                  placeholder="默认为 3"
+                />
+                <span class="kb-form-hint">返回最相似的 K 个文本分段</span>
+              </div>
+            </div>
+            <div class="kb-form-row">
+              <label class="kb-form-label" for="edit-score">Score</label>
+              <div>
+                <input
+                  id="edit-score"
+                  v-model.number="editForm.score"
+                  class="kb-form-input"
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  placeholder="默认为 0.7"
+                />
+                <span class="kb-form-hint">仅返回相似度高于此阈值的分段（0~1）</span>
+              </div>
+            </div>
+            <div class="kb-modal-actions">
+              <button type="button" class="refresh-btn" @click="closeEditModal">取消</button>
+              <button type="submit" class="primary-action-btn" :disabled="editSaving">
+                {{ editSaving ? '保存中…' : '保存' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
 
       <main class="kb-detail-body">
-        <!-- 文档列表（默认） -->
-        <section v-show="activeTab === 'docs'" class="kb-tab-panel">
-          <div class="data-table-card">
+        <div class="kb-info-cards">
+          <!-- 基础信息 -->
+          <div class="kb-info-card">
+            <h2 class="kb-card-title">基本信息</h2>
+            <dl class="kb-dl">
+              <div class="kb-dl-row">
+                <dt>知识库名称</dt>
+                <dd>{{ kb.name }}</dd>
+              </div>
+              <div class="kb-dl-row">
+                <dt>知识库 ID</dt>
+                <dd class="kb-info-mono">{{ kb.indexName }}</dd>
+              </div>
+              <div class="kb-dl-row">
+                <dt>可见范围</dt>
+                <dd>{{ kb.visibility === 'public' ? '公开（所有人可见）' : '私有（仅自己可见）' }}</dd>
+              </div>
+              <div class="kb-dl-row">
+                <dt>文档数量</dt>
+                <dd>{{ kb.documentCount ?? documentList.length }}</dd>
+              </div>
+              <div class="kb-dl-row kb-dl-row-full">
+                <dt>知识库描述</dt>
+                <dd>{{ kb.description || '—' }}</dd>
+              </div>
+              <div class="kb-dl-row">
+                <dt>创建时间</dt>
+                <dd>{{ formatDate(kb.createdAt) }}</dd>
+              </div>
+              <div class="kb-dl-row kb-dl-row-full">
+                <dt>检索配置</dt>
+                <dd>
+                  <div class="kb-retrieval-stats">
+                    <div class="kb-retrieval-stat">
+                      <span class="kb-retrieval-stat-label">TopK</span>
+                      <span class="kb-retrieval-stat-value">{{ kb.topK ?? 3 }}</span>
+                      <span class="kb-retrieval-stat-desc">返回最相似的分段数</span>
+                    </div>
+                    <div class="kb-retrieval-stat">
+                      <span class="kb-retrieval-stat-label">Score</span>
+                      <span class="kb-retrieval-stat-value">{{ kb.score ?? 0.7 }}</span>
+                      <span class="kb-retrieval-stat-desc">相似度阈值（0~1）</span>
+                    </div>
+                  </div>
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <!-- 文档列表 -->
+          <div class="kb-info-card kb-docs-card">
+            <h2 class="kb-card-title">文档列表</h2>
             <div class="data-table-panel" :class="{ 'is-loading': loadingDocs }">
               <div v-if="loadingDocs" class="data-table-loading-overlay">
                 <span class="kb-spinner" />
@@ -117,55 +219,7 @@
               </div>
             </div>
           </div>
-        </section>
-
-        <!-- 基础信息 -->
-        <section v-show="activeTab === 'info'" class="kb-tab-panel kb-tab-panel-info">
-          <div class="kb-info-cards">
-            <div class="kb-info-card">
-              <h2 class="kb-card-title">基本信息</h2>
-              <dl class="kb-dl">
-                <div class="kb-dl-row">
-                  <dt>知识库名称</dt>
-                  <dd>{{ kb.name }}</dd>
-                </div>
-                <div class="kb-dl-row">
-                  <dt>知识库 ID</dt>
-                  <dd class="kb-info-mono">{{ kb.indexName }}</dd>
-                </div>
-                <div class="kb-dl-row">
-                  <dt>可见范围</dt>
-                  <dd>{{ kb.visibility === 'public' ? '公开（所有人可见）' : '私有（仅自己可见）' }}</dd>
-                </div>
-                <div class="kb-dl-row">
-                  <dt>文档数量</dt>
-                  <dd>{{ kb.documentCount ?? documentList.length }}</dd>
-                </div>
-                <div class="kb-dl-row kb-dl-row-full">
-                  <dt>知识库描述</dt>
-                  <dd>{{ kb.description || '—' }}</dd>
-                </div>
-                <div class="kb-dl-row">
-                  <dt>创建时间</dt>
-                  <dd>{{ formatDate(kb.createdAt) }}</dd>
-                </div>
-              </dl>
-            </div>
-
-            <div v-if="kb.buildTaskId || hasProcessingDocs" class="kb-info-card kb-info-card-build">
-              <h2 class="kb-card-title">构建进度</h2>
-              <p class="kb-card-desc">{{ buildOverall.message }}</p>
-              <KbBuildProgress
-                :steps="buildSteps"
-                :task-status="buildTaskStatus"
-                :task-result="buildTaskResult"
-                :has-processing-docs="hasProcessingDocs"
-                :last-update-time="buildLastUpdate"
-                class="kb-build-inline"
-              />
-            </div>
-          </div>
-        </section>
+        </div>
       </main>
     </template>
 
@@ -177,40 +231,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import KbBuildProgress from '@/components/KbBuildProgress.vue'
-import { getTaskInfo } from '@/api/task'
-import type { AsyncTaskStep } from '@/api/task'
 import type { KnowledgeBaseItem } from '@/api/knowledgeBase'
-import { getKnowledgeBase } from '@/api/knowledgeBase'
+import { getKnowledgeBase, updateKnowledgeBase } from '@/api/knowledgeBase'
 import type { DocumentInfoItem } from '@/api/document'
 import { getDocumentList, deleteDocument } from '@/api/document'
-import {
-  KB_BUILD_DEFAULT_STEPS,
-  normalizeTaskSteps,
-  resolveBuildOverallStatus,
-} from '@/utils/buildProgress'
-import type { BuildTaskStep } from '@/utils/buildProgress'
 import { toastError } from '@/utils/toast'
-
-type KbTab = 'info' | 'docs'
 
 const route = useRoute()
 const router = useRouter()
 const kbId = Number(route.params.kbId)
-
-const activeTab = ref<KbTab>((route.query.tab as KbTab) === 'docs' ? 'docs' : 'info')
 
 const kb = ref<KnowledgeBaseItem | null>(null)
 const loadingKb = ref(true)
 const documentList = ref<DocumentInfoItem[]>([])
 const loadingDocs = ref(false)
 
-const buildSteps = ref<BuildTaskStep[]>([...KB_BUILD_DEFAULT_STEPS])
-const buildTaskStatus = ref<string | undefined>()
-const buildTaskResult = ref<string | null>(null)
-const buildLastUpdate = ref<string | null>(null)
+const editModalOpen = ref(false)
+const editSaving = ref(false)
+const editForm = ref({ name: '', description: '', visibility: 'private', topK: 3 as number | null, score: 0.7 as number | null })
 
 let buildPollTimer: ReturnType<typeof setInterval> | null = null
 let pageLoading = false
@@ -219,21 +259,8 @@ const hasProcessingDocs = computed(() =>
   documentList.value.some((d) => d.status !== 'DONE' && d.status !== 'FAILED'),
 )
 
-const buildOverall = computed(() =>
-  resolveBuildOverallStatus(buildTaskStatus.value, buildTaskResult.value, hasProcessingDocs.value),
-)
-
 function isBuildActive() {
-  return (
-    hasProcessingDocs.value
-    || buildTaskStatus.value === 'RUNNING'
-    || buildTaskStatus.value === 'PENDING'
-  )
-}
-
-function setTab(tab: KbTab) {
-  activeTab.value = tab
-  router.replace({ query: { ...route.query, tab: tab === 'info' ? undefined : tab } })
+  return hasProcessingDocs.value
 }
 
 function goToKbList() {
@@ -286,35 +313,10 @@ async function loadDocuments() {
   }
 }
 
-async function refreshBuildProgress() {
-  if (!kb.value?.buildTaskId) {
-    await loadKb(true)
-  }
-  const taskId = kb.value?.buildTaskId
-  if (!taskId) return
-
-  try {
-    const res = await getTaskInfo(taskId)
-    if (res.success && res.data) {
-      buildTaskStatus.value = res.data.status
-      buildTaskResult.value = res.data.result
-      if (res.data.steps) {
-        const raw: AsyncTaskStep[] =
-          typeof res.data.steps === 'string' ? JSON.parse(res.data.steps) : res.data.steps
-        buildSteps.value = normalizeTaskSteps(raw)
-      }
-      buildLastUpdate.value = new Date().toLocaleString('zh-CN')
-    }
-  } catch {
-    // ignore
-  }
-}
-
 function startBuildPoll() {
   if (buildPollTimer) return
   buildPollTimer = setInterval(async () => {
     await loadDocuments()
-    await refreshBuildProgress()
     if (!isBuildActive()) stopBuildPoll()
   }, 2000)
 }
@@ -336,13 +338,53 @@ async function loadPageData() {
       loadingKb.value = false
       return
     }
-    await Promise.all([loadDocuments(), refreshBuildProgress()])
+    await loadDocuments()
     if (isBuildActive()) {
       startBuildPoll()
     }
   } finally {
     loadingKb.value = false
     pageLoading = false
+  }
+}
+
+function openEditModal() {
+  if (!kb.value) return
+  editForm.value = {
+    name: kb.value.name,
+    description: kb.value.description ?? '',
+    visibility: kb.value.visibility ?? 'private',
+    topK: kb.value.topK ?? 3,
+    score: kb.value.score ?? 0.7,
+  }
+  editModalOpen.value = true
+}
+
+function closeEditModal() {
+  editModalOpen.value = false
+}
+
+async function submitEdit() {
+  if (!kb.value) return
+  editSaving.value = true
+  try {
+    const res = await updateKnowledgeBase(kbId, {
+      name: editForm.value.name,
+      description: editForm.value.description,
+      visibility: editForm.value.visibility as 'private' | 'public',
+      topK: editForm.value.topK,
+      score: editForm.value.score,
+    })
+    if (res.success && res.data) {
+      kb.value = res.data
+      editModalOpen.value = false
+    } else {
+      toastError(res.message || '保存失败')
+    }
+  } catch (e: unknown) {
+    toastError(e instanceof Error ? e.message : '保存失败')
+  } finally {
+    editSaving.value = false
   }
 }
 
@@ -356,7 +398,6 @@ async function deleteDocumentById(id: number) {
     const res = await deleteDocument(id)
     if (res.success) {
       documentList.value = documentList.value.filter((d) => d.id !== id)
-      await refreshBuildProgress()
       if (kb.value) {
         kb.value.documentCount = Math.max(0, (kb.value.documentCount ?? 1) - 1)
       }
@@ -368,13 +409,6 @@ async function deleteDocumentById(id: number) {
     toastError(msg)
   }
 }
-
-watch(
-  () => route.query.tab,
-  (tab) => {
-    activeTab.value = tab === 'docs' ? 'docs' : 'info'
-  },
-)
 
 onMounted(() => {
   if (!kbId || Number.isNaN(kbId)) {
@@ -552,39 +586,6 @@ function formatDate(value: string | null | undefined): string {
 }
 
 /* 标签 */
-.kb-tabs {
-  display: flex;
-  gap: 0.25rem;
-  padding: 0 2rem;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-card);
-  flex-shrink: 0;
-}
-
-.kb-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.75rem 1rem;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
-}
-
-.kb-tab:hover {
-  color: var(--color-text-primary);
-}
-
-.kb-tab.active {
-  color: var(--color-button-primary);
-  border-bottom-color: var(--color-button-primary);
-}
 
 /* 内容区 */
 .kb-detail-body {
@@ -594,26 +595,10 @@ function formatDate(value: string | null | undefined): string {
   overflow-y: auto;
 }
 
-.kb-tab-panel {
-  animation: fadeIn 0.2s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 /* 文档表格 */
-.data-table-card {
-  width: 100%;
-}
-
 .data-table-panel {
   position: relative;
   min-height: 200px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-bg-card);
   overflow: hidden;
 }
 
@@ -802,10 +787,6 @@ function formatDate(value: string | null | undefined): string {
 }
 
 /* 基础信息 */
-.kb-tab-panel-info {
-  max-width: 960px;
-}
-
 .kb-info-cards {
   display: flex;
   flex-direction: column;
@@ -819,16 +800,21 @@ function formatDate(value: string | null | undefined): string {
   border-radius: 10px;
 }
 
+.kb-docs-card {
+  padding: 1.25rem 0 0;
+  overflow: hidden;
+}
+
+.kb-docs-card .kb-card-title {
+  padding: 0 1.5rem 1rem;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
 .kb-card-title {
   margin: 0 0 1rem;
   font-size: 0.9375rem;
   font-weight: 600;
-}
-
-.kb-card-desc {
-  margin: -0.5rem 0 0.75rem;
-  font-size: 0.875rem;
-  color: var(--color-text-secondary);
 }
 
 .kb-dl {
@@ -866,18 +852,6 @@ function formatDate(value: string | null | undefined): string {
 .kb-info-mono {
   font-family: ui-monospace, monospace;
   font-size: 0.875rem;
-}
-
-.kb-build-inline :deep(.kb-build-section) {
-  margin-bottom: 0;
-}
-
-.kb-build-inline :deep(.kb-build-header) {
-  margin-bottom: 0.5rem;
-}
-
-.kb-build-inline :deep(.kb-build-title) {
-  display: none;
 }
 
 /* 按钮 */
@@ -948,7 +922,6 @@ function formatDate(value: string | null | undefined): string {
     padding: 1rem 1.25rem;
   }
 
-  .kb-tabs,
   .kb-detail-body {
     padding-left: 1.25rem;
     padding-right: 1.25rem;
@@ -957,6 +930,126 @@ function formatDate(value: string | null | undefined): string {
   .kb-dl {
     grid-template-columns: 1fr;
   }
+}
+
+/* 编辑弹窗 */
+.kb-modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.kb-modal {
+  width: min(480px, calc(100vw - 2rem));
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.kb-modal-title {
+  margin: 0 0 1.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.kb-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.kb-form-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.kb-form-row-full {
+  align-items: flex-start;
+}
+
+.kb-form-label {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.kb-form-input {
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.kb-form-input:focus {
+  border-color: var(--color-border-focus);
+}
+
+.kb-form-textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.kb-retrieval-stats {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.kb-retrieval-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.625rem 1rem;
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  min-width: 7rem;
+}
+
+.kb-retrieval-stat-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kb-retrieval-stat-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-retrieval-stat-desc {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+}
+
+.kb-form-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+  margin-top: 0.25rem;
+}
+
+.kb-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
 }
 
 @media (max-width: 720px) {

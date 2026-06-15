@@ -12,12 +12,16 @@ export interface KnowledgeBaseItem {
   documentCount: number
   buildTaskId?: string | null
   createdAt: string | null
+  topK?: number | null
+  score?: number | null
 }
 
 export interface KnowledgeBaseCreatePayload {
   name: string
   description?: string
   visibility?: 'private' | 'public'
+  topK?: number | null
+  score?: number | null
 }
 
 export interface KnowledgeBaseCreateResult {
@@ -44,6 +48,14 @@ export async function getKnowledgeBase(kbId: number) {
 
 /** 更新草稿知识库基本信息 */
 export async function updateKnowledgeBaseDraft(
+  kbId: number,
+  payload: KnowledgeBaseCreatePayload,
+) {
+  return $put<KnowledgeBaseItem>(`/kb/${kbId}`, payload)
+}
+
+/** 更新知识库基本信息（名称、描述、可见性） */
+export async function updateKnowledgeBase(
   kbId: number,
   payload: KnowledgeBaseCreatePayload,
 ) {

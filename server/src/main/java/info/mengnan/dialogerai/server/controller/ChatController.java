@@ -1,26 +1,22 @@
 package info.mengnan.dialogerai.server.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
-import dev.langchain4j.agent.tool.ToolSpecification;
-import dev.langchain4j.service.tool.ToolExecutor;
-import info.mengnan.dialogerai.kb.core.KnowledgeBaseIndexResolver;
-import info.mengnan.dialogerai.rag.container.assemble.AssembledModels;
+import info.mengnan.dialogerai.rag.ChatService;
 import info.mengnan.dialogerai.rag.handler.StreamingResponseHandler;
 import info.mengnan.dialogerai.rag.service.DirectModelInvoker;
 import info.mengnan.dialogerai.repository.entity.ChatMessage;
 import info.mengnan.dialogerai.repository.entity.ChatSession;
+import info.mengnan.dialogerai.repository.repo.ChatMessageRagSourceRepository;
+import info.mengnan.dialogerai.server.core.DefaultAiServiceAssembler;
 import info.mengnan.dialogerai.server.service.ChatMessageService;
 import info.mengnan.dialogerai.server.service.ChatSessionService;
 import info.mengnan.dialogerai.server.param.chat.ChatRequest;
 import info.mengnan.dialogerai.server.param.R;
-import info.mengnan.dialogerai.rag.ChatService;
 import info.mengnan.dialogerai.server.handler.FluxStreamingResponseHandler;
 import info.mengnan.dialogerai.server.param.chat.ChatConversations;
 import info.mengnan.dialogerai.server.param.chat.ChatHistoryResponse;
 import info.mengnan.dialogerai.server.param.chat.ChatSessionResponse;
 import info.mengnan.dialogerai.server.param.chat.RagSourceDto;
-import info.mengnan.dialogerai.server.service.RagAdapterService;
-import info.mengnan.dialogerai.server.service.ToolAdapterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -30,9 +26,8 @@ import reactor.core.publisher.Flux;
 import java.util.List;
 import java.util.Map;
 
-import static info.mengnan.dialogerai.common.param.MessageRole.ASSISTANT;
-import static info.mengnan.dialogerai.common.param.MessageRole.SYSTEM;
-import static info.mengnan.dialogerai.common.param.MessageRole.USER;
+import static info.mengnan.dialogerai.common.param.MessageRole.*;
+import static info.mengnan.dialogerai.server.param.chat.ChatSessionResponse.DEFAULT_TITLE;
 
 
 @Slf4j
@@ -44,9 +39,8 @@ public class ChatController {
     private final ChatService chatService;
     private final ChatSessionService chatSessionService;
     private final ChatMessageService chatMessageService;
-    private final RagAdapterService ragAdapterService;
-    private final ToolAdapterService toolAdapterService;
-    private final KnowledgeBaseIndexResolver knowledgeBaseIndexResolver;
+    private final DirectModelInvoker directModelInvoker;
+    private final ChatMessageRagSourceRepository ragSourceRepository;
 
     /**
      * 流式对话接口 - 使用 HTTP Streaming (application/x-ndjson)
@@ -79,16 +73,25 @@ public class ChatController {
     @GetMapping(value = "/conversations")
     public R conversations(@RequestParam("sessionId") String sessionId) {
         Long memberId = StpUtil.getLoginIdAsLong();
-        ChatConversations chatConversations = new ChatConversations(memberId, sessionId);
+        ChatConversations chatConversations = new ChatConversations(memberId,sessionId);
 
-        String title = chatSessionService.generateTitle(sessionId);
-        if (title != null) {
-            chatConversations.setTitle(title);
+        ChatSession chatSession = chatSessionService.findBySessionId(sessionId);
+        if (chatSession != null && DEFAULT_TITLE.equals(chatSession.getTitle())) {
+            List<String> list = chatMessageService.findChat(sessionId, List.of(ASSISTANT.n(), USER.n())).stream()
+                    .map(ChatMessage::getContent)
+                    .limit(3)
+                    .toList();
+            if (list.size() >= 2) {
+                Map<String, Object> params = Map.of("query", list);
+                String title = directModelInvoker.directInvoke("conversations.titleGeneration",
+                        "title_generation", params);
+                chatConversations.setTitle(title);
+                chatSessionService.updateChatTitle(sessionId, title);
+            }
         }
-
         ChatMessage latest = chatMessageService.findLatest(sessionId, ASSISTANT.n());
         if (latest != null) {
-            List<Long> sourceIds = chatMessageService.findRagSourceIds(latest.getId());
+            List<Long> sourceIds = ragSourceRepository.findIdsForMessage(latest.getId());
             if (!sourceIds.isEmpty()) chatConversations.setSourceIds(sourceIds);
         }
 
@@ -103,23 +106,17 @@ public class ChatController {
     private Flux<String> streamResponse(ChatRequest chatRequest) {
         return Flux.create(sink -> {
             try {
-                // 截断消息
                 if (chatRequest.getFromMessageId() != null)
                     chatMessageService.truncateMessages(chatRequest.getSessionId(), chatRequest.getFromMessageId());
 
-                // 组装 AssembledModels
-                AssembledModels assembledModels = ragAdapterService.assembleModels(chatRequest.getOptionId());
-                Map<ToolSpecification, ToolExecutor> toolMap = toolAdapterService.dynamicTools(chatRequest.getMemberId());
-                List<KnowledgeBaseIndexResolver.KbIndexRef> kbIndexRefs = knowledgeBaseIndexResolver.resolveActiveIndexes(chatRequest.getMemberId());
-                // 创建回调处理器
                 StreamingResponseHandler handler = new FluxStreamingResponseHandler(sink, chatRequest.getSessionId());
-
-                // 调用 ChatService 的流式方法
                 chatService.chatStreaming(
-                        chatRequest.getMemberId(),
                         chatRequest.getSessionId(),
                         chatRequest.getMessage(),
-                        handler, assembledModels, toolMap, kbIndexRefs);
+                        handler,
+                        new DefaultAiServiceAssembler(
+                                chatRequest.getMemberId(),
+                                chatRequest.getOptionId()));
             } catch (Exception e) {
                 sink.error(e);
             }

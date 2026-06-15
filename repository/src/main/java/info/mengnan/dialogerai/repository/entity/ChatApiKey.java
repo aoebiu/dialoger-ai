@@ -40,6 +40,8 @@ public class ChatApiKey {
      */
     private String modelProvider;
 
+    private String baseUrl;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

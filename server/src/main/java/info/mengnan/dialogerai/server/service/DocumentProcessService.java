@@ -28,7 +28,7 @@ import java.io.IOException;
 public class DocumentProcessService {
 
     private final DocumentInfoRepository documentInfoRepository;
-    private final KnowledgeBaseRepository knowledgeBaseRepository;
+    private final KnowledgeBaseService knowledgeBaseService;
     private final KnowledgeBaseBuildService knowledgeBaseBuildService;
     private final ApplicationEventPublisher eventPublisher;
     private final FileUploadStorage fileStorage;
@@ -36,7 +36,7 @@ public class DocumentProcessService {
     public DocumentUploadResponse upload(MultipartFile file, Long kbId, String type, String cleaningJson, Long memberId) throws IOException {
         String originalFilename = file.getOriginalFilename();
 
-        KnowledgeBase kb = knowledgeBaseRepository.findByIdAndMemberId(kbId, memberId);
+        KnowledgeBase kb = knowledgeBaseService.findById(kbId, memberId);
         if (kb == null)
             throw new BusinessException(ErrorCode.KB_NOT_FOUND);
 

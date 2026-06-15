@@ -18,7 +18,6 @@ public enum ErrorCode {
     // 知识库
     KB_NOT_FOUND("2001", "知识库不存在"),
     KB_NAME_EMPTY("2002", "知识库名称不能为空"),
-    KB_NOT_DRAFT("2003", "仅草稿知识库可编辑"),
 
     // 文档
     DOC_DUPLICATE("3001", "该知识库中已存在同名文档"),

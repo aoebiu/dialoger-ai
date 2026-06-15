@@ -2,6 +2,7 @@ package info.mengnan.dialogerai.rag.config;
 
 import info.mengnan.dialogerai.common.json.JSONObject;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -10,6 +11,7 @@ import java.util.Map;
  * 模型配置
  */
 @Data
+@NoArgsConstructor
 public class ModelConfig {
     /**
      * 模型名称
@@ -41,8 +43,6 @@ public class ModelConfig {
      */
     private JSONObject params = new JSONObject();
 
-    public ModelConfig() {
-    }
 
     public ModelConfig(String modelName, String apiKey, String modelProvider, String keyType) {
         this.modelName = modelName;

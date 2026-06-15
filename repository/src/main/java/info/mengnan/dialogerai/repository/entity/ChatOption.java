@@ -55,16 +55,6 @@ public class ChatOption {
      */
     private String contentInjectorPrompt;
 
-    /**
-     * 检索最大结果数
-     */
-    private Integer maxResults;
-
-    /**
-     * 检索最小相似度分数
-     */
-    private Double minScore;
-
     @TableField("in_DB")
     private Boolean inDB;
 

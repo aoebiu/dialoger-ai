@@ -18,6 +18,8 @@ public class KnowledgeBaseResponse {
     private Long documentCount;
     private String buildTaskId;
     private LocalDateTime createdAt;
+    private Integer topK;
+    private Double score;
 
     public static KnowledgeBaseResponse from(KnowledgeBase kb, long documentCount) {
         KnowledgeBaseResponse resp = new KnowledgeBaseResponse();
@@ -29,6 +31,8 @@ public class KnowledgeBaseResponse {
         resp.setIndexName(kb.getIndexName());
         resp.setDocumentCount(documentCount);
         resp.setBuildTaskId(kb.getBuildTaskId());
+        resp.setTopK(kb.getTopK());
+        resp.setScore(kb.getScore());
         resp.setCreatedAt(kb.getCreatedAt());
         return resp;
     }

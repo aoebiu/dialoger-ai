@@ -18,7 +18,7 @@ public class DbKnowledgeBaseIndexResolver implements KnowledgeBaseIndexResolver 
     @Override
     public List<KbIndexRef> resolveActiveIndexes(Long memberId) {
         return knowledgeBaseRepository.findActiveByMemberId(memberId).stream()
-                .map(kb -> new KbIndexRef(kb.getIndexName(), kb.getName()))
+                .map(kb -> new KbIndexRef(kb.getIndexName(), kb.getName(),kb.getTopK(),kb.getScore()))
                 .toList();
     }
 }

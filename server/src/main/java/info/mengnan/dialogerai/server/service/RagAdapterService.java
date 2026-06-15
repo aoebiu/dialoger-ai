@@ -1,26 +1,18 @@
 package info.mengnan.dialogerai.server.service;
 
+import info.mengnan.dialogerai.common.param.ModelType;
 import info.mengnan.dialogerai.common.util.JSONUtil;
 import info.mengnan.dialogerai.rag.container.assemble.AssembledModels;
-import info.mengnan.dialogerai.rag.container.assemble.AssembledModelsConstruct;
 import info.mengnan.dialogerai.rag.config.ChatOptionConfig;
 import info.mengnan.dialogerai.rag.config.ModelConfig;
-import info.mengnan.dialogerai.repository.entity.ChatApiKey;
 import info.mengnan.dialogerai.repository.entity.ChatOption;
-import info.mengnan.dialogerai.repository.entity.ChatOptionApiKeyRel;
-import info.mengnan.dialogerai.repository.repo.ChatApiKeyRepository;
-import info.mengnan.dialogerai.repository.repo.ChatOptionApiKeyRelRepository;
 import info.mengnan.dialogerai.repository.repo.ChatOptionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * RAG适配服务
@@ -33,9 +25,7 @@ import java.util.stream.Collectors;
 public class RagAdapterService {
 
     private final ChatOptionRepository chatOptionService;
-    private final ChatApiKeyRepository chatApiKeyService;
-    private final ChatOptionApiKeyRelRepository chatOptionApiKeyRelService;
-    private final AssembledModelsConstruct assembledModelsConstruct;
+    private final ModelConfigService modelConfigService;
 
     /**
      * 根据 optionId 查询并组装 AssembledModels
@@ -50,25 +40,10 @@ public class RagAdapterService {
             throw new IllegalArgumentException("找不到对应的聊天配置或配置未启用,optionId: " + optionId);
         }
 
-        // 查询该选项关联的所有模型
-        List<ChatOptionApiKeyRel> relations = chatOptionApiKeyRelService.findByChatOptionId(optionId);
-
-        List<ModelConfig> modelConfigs = new ArrayList<>();
-        if (!relations.isEmpty()) {
-            List<Long> relIds = relations.stream().map(ChatOptionApiKeyRel::getChatApiKeyId).toList();
-            Map<Long, ChatApiKey> chatApiKeyMap = chatApiKeyService.findByIds(relIds).stream()
-                    .collect(Collectors.toMap(ChatApiKey::getId, Function.identity()));
-            for (ChatOptionApiKeyRel rel : relations) {
-                ChatApiKey chatApiKey = chatApiKeyMap.get(rel.getChatApiKeyId());
-                if (chatApiKey != null) {
-                    modelConfigs.add(buildModelConfig(chatApiKey));
-                }
-            }
-        }
-
+        Map<ModelType, ModelConfig> modelConfigMap = modelConfigService.loadModelConfigs(chatOption.getMemberId());
         // 组装并返回
         ChatOptionConfig chatOptionConfig = buildChatOptionConfig(chatOption);
-        return assembledModelsConstruct.assemble(chatOptionConfig, modelConfigs);
+        return new AssembledModels(chatOptionConfig, modelConfigMap);
     }
 
     private ChatOptionConfig buildChatOptionConfig(ChatOption chatOption) {
@@ -80,18 +55,7 @@ public class RagAdapterService {
         config.setTransform(chatOption.getTransform());
         config.setContentAggregator(chatOption.getContentAggregator());
         config.setContentInjectorPrompt(chatOption.getContentInjectorPrompt());
-        config.setMaxResults(chatOption.getMaxResults());
-        config.setMinScore(chatOption.getMinScore());
         config.setInDB(chatOption.getInDB());
-        return config;
-    }
-
-    private ModelConfig buildModelConfig(ChatApiKey apiKey) {
-        ModelConfig config = new ModelConfig();
-        config.setModelName(apiKey.getModelName());
-        config.setApiKey(apiKey.getApiKey());
-        config.setModelProvider(apiKey.getModelProvider());
-        config.setKeyType(apiKey.getKeyType());
         return config;
     }
 

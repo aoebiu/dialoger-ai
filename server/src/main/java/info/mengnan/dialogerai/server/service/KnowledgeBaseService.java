@@ -8,10 +8,9 @@ import info.mengnan.dialogerai.repository.repo.KnowledgeBaseRepository;
 import info.mengnan.dialogerai.server.core.DocumentEmbedding;
 import info.mengnan.dialogerai.server.exception.BusinessException;
 import info.mengnan.dialogerai.server.param.ErrorCode;
-import info.mengnan.dialogerai.server.param.knowledgebase.KnowledgeBaseCreateRequest;
 import info.mengnan.dialogerai.server.param.knowledgebase.KnowledgeBaseCreateResponse;
+import info.mengnan.dialogerai.server.param.knowledgebase.KnowledgeBaseRequest;
 import info.mengnan.dialogerai.server.param.knowledgebase.KnowledgeBaseResponse;
-import info.mengnan.dialogerai.server.param.knowledgebase.KnowledgeBaseUpdateRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,7 +18,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -33,7 +31,8 @@ public class KnowledgeBaseService {
     private final KnowledgeBaseBuildService knowledgeBaseBuildService;
     private final DocumentEmbedding documentEmbedding;
 
-    public KnowledgeBaseCreateResponse create(KnowledgeBaseCreateRequest request, Long memberId) {
+    public KnowledgeBaseCreateResponse create(KnowledgeBaseRequest request) {
+        Long memberId = request.getMemberId();
         cleanupExpiredDrafts(memberId);
 
         KnowledgeBase kb = new KnowledgeBase();
@@ -43,41 +42,56 @@ public class KnowledgeBaseService {
         kb.setVisibility(request.getVisibility());
         kb.setStatus(KnowledgeBaseStatus.DRAFT);
         kb.setIndexName("pending");
+        kb.setTopK(request.getTopK());
+        kb.setScore(request.getScore());
         knowledgeBaseRepository.insert(kb);
 
-        kb.setIndexName(documentEmbedding.buildKbIndexName(memberId, kb.getId()));
-        knowledgeBaseRepository.updateById(kb);
+        String indexName = documentEmbedding.buildKbIndexName(memberId, kb.getId());
+        KnowledgeBase updateKb = new KnowledgeBase();
+        updateKb.setId(kb.getId());
+        updateKb.setIndexName(indexName);
+        knowledgeBaseRepository.updateById(updateKb);
+        kb.setIndexName(indexName);
 
         log.info("draft knowledge base created: id={}, name={}, indexName={}", kb.getId(), kb.getName(), kb.getIndexName());
         return new KnowledgeBaseCreateResponse(kb.getId(), kb.getName(), kb.getIndexName(), kb.getStatus());
     }
 
-    public KnowledgeBaseResponse update(Long kbId, Long memberId, KnowledgeBaseUpdateRequest request) {
-        KnowledgeBase kb = knowledgeBaseRepository.findByIdAndMemberId(kbId, memberId);
-        if (kb == null)
-            throw new BusinessException(ErrorCode.KB_NOT_FOUND);
-        if (!KnowledgeBaseStatus.DRAFT.equals(kb.getStatus()))
-            throw new BusinessException(ErrorCode.KB_NOT_DRAFT);
+    public KnowledgeBaseResponse update(KnowledgeBaseRequest request) {
+        KnowledgeBase kb = findById(request.getKbId(), request.getMemberId());
 
-        if (request.getName() != null && !request.getName().isBlank())
-            kb.setName(request.getName().trim());
-        if (request.getDescription() != null)
-            kb.setDescription(request.getDescription());
-        if (request.getVisibility() != null && !request.getVisibility().isBlank())
-            kb.setVisibility(request.getVisibility());
+        KnowledgeBase updateKb = new KnowledgeBase();
+        updateKb.setId(kb.getId());
+        if (request.getName() != null && !request.getName().isBlank()) {
+            updateKb.setName(request.getName().trim());
+            kb.setName(updateKb.getName());
+        }
+        if (request.getDescription() != null) {
+            updateKb.setDescription(request.getDescription());
+            kb.setDescription(updateKb.getDescription());
+        }
+        if (request.getVisibility() != null && !request.getVisibility().isBlank()) {
+            updateKb.setVisibility(request.getVisibility());
+            kb.setVisibility(updateKb.getVisibility());
+        }
+        if (request.getTopK() != null && request.getScore() != null) {
+            kb.setTopK(request.getTopK());
+            kb.setScore(request.getScore());
+        }
 
-        knowledgeBaseRepository.updateById(kb);
-        return KnowledgeBaseResponse.from(kb, documentInfoRepository.countByKbId(kbId));
+        knowledgeBaseRepository.updateById(updateKb);
+        return KnowledgeBaseResponse.from(kb, documentInfoRepository.countByKbId(request.getKbId()));
     }
 
     public KnowledgeBaseResponse activateDraft(Long kbId, Long memberId) {
-        KnowledgeBase kb = knowledgeBaseRepository.findByIdAndMemberId(kbId, memberId);
-        if (kb == null)
-            throw new BusinessException(ErrorCode.KB_NOT_FOUND);
+        KnowledgeBase kb = findById(kbId, memberId);
 
         if (KnowledgeBaseStatus.DRAFT.equals(kb.getStatus())) {
+            KnowledgeBase updateKb = new KnowledgeBase();
+            updateKb.setId(kb.getId());
+            updateKb.setStatus(KnowledgeBaseStatus.ACTIVE);
+            knowledgeBaseRepository.updateById(updateKb);
             kb.setStatus(KnowledgeBaseStatus.ACTIVE);
-            knowledgeBaseRepository.updateById(kb);
             log.info("knowledge base activated: kbId={}, name={}", kb.getId(), kb.getName());
         }
         return KnowledgeBaseResponse.from(kb, documentInfoRepository.countByKbId(kbId));
@@ -93,19 +107,15 @@ public class KnowledgeBaseService {
     }
 
     public KnowledgeBaseResponse getKnowledgeBase(Long kbId, Long memberId) {
-        KnowledgeBase kb = knowledgeBaseRepository.findByIdAndMemberId(kbId, memberId);
-        if (kb == null)
-            throw new BusinessException(ErrorCode.KB_NOT_FOUND);
+        KnowledgeBase kb = findById(kbId, memberId);
 
         syncBuildProgressIfNeeded(kb, memberId);
-        kb = knowledgeBaseRepository.findByIdAndMemberId(kbId, memberId);
+        kb = findById(kbId, memberId);
         return KnowledgeBaseResponse.from(kb, documentInfoRepository.countByKbId(kbId));
     }
 
     public void deleteKnowledgeBase(Long kbId, Long memberId) {
-        KnowledgeBase kb = knowledgeBaseRepository.findByIdAndMemberId(kbId, memberId);
-        if (kb == null)
-            throw new BusinessException(ErrorCode.KB_NOT_FOUND);
+        KnowledgeBase kb = findById(kbId, memberId);
 
         deleteKnowledgeBase(kb);
         log.info("knowledge base deleted: kbId={}, indexName={}", kbId, kb.getIndexName());
@@ -125,6 +135,13 @@ public class KnowledgeBaseService {
                 log.warn("failed to remove expired draft kb: kbId={}", draft.getId(), e);
             }
         }
+    }
+
+    public KnowledgeBase findById(Long kbId, Long memberId) {
+        KnowledgeBase kb = knowledgeBaseRepository.findById(kbId);
+        if (kb == null || !memberId.equals(kb.getMemberId()))
+            throw new BusinessException(ErrorCode.KB_NOT_FOUND);
+        return kb;
     }
 
     private void deleteKnowledgeBase(KnowledgeBase kb) {

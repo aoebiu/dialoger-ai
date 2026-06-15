@@ -1,11 +1,9 @@
 package info.mengnan.dialogerai.server.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
-import info.mengnan.dialogerai.server.exception.BusinessException;
 import info.mengnan.dialogerai.server.param.ErrorCode;
 import info.mengnan.dialogerai.server.param.R;
-import info.mengnan.dialogerai.server.param.knowledgebase.KnowledgeBaseCreateRequest;
-import info.mengnan.dialogerai.server.param.knowledgebase.KnowledgeBaseUpdateRequest;
+import info.mengnan.dialogerai.server.param.knowledgebase.KnowledgeBaseRequest;
 import info.mengnan.dialogerai.server.service.KnowledgeBaseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,18 +18,21 @@ public class KnowledgeBaseController {
     private final KnowledgeBaseService knowledgeBaseService;
 
     @PostMapping
-    public R create(@RequestBody KnowledgeBaseCreateRequest request) {
+    public R create(@RequestBody KnowledgeBaseRequest request) {
         if (request.getName() == null || request.getName().isBlank())
             return R.error(ErrorCode.KB_NAME_EMPTY);
 
         Long memberId = StpUtil.getLoginIdAsLong();
-        return R.ok(knowledgeBaseService.create(request, memberId));
+        request.setMemberId(memberId);
+        return R.ok(knowledgeBaseService.create(request));
     }
 
     @PutMapping("/{kbId}")
-    public R update(@PathVariable("kbId") Long kbId, @RequestBody KnowledgeBaseUpdateRequest request) {
+    public R update(@PathVariable("kbId") Long kbId, @RequestBody KnowledgeBaseRequest request) {
         Long memberId = StpUtil.getLoginIdAsLong();
-        return R.ok(knowledgeBaseService.update(kbId, memberId, request));
+        request.setMemberId(memberId);
+        request.setKbId(kbId);
+        return R.ok(knowledgeBaseService.update(request));
 
     }
 

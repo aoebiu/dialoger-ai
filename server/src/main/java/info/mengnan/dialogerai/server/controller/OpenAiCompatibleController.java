@@ -1,21 +1,14 @@
 package info.mengnan.dialogerai.server.controller;
 
-import dev.langchain4j.agent.tool.ToolSpecification;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.service.tool.ToolExecutor;
-import info.mengnan.dialogerai.kb.core.KnowledgeBaseIndexResolver;
-import info.mengnan.dialogerai.rag.container.assemble.AssembledModels;
 import info.mengnan.dialogerai.rag.handler.StreamingResponseHandler;
 import info.mengnan.dialogerai.repository.entity.ChatProjectApiKey;
 import info.mengnan.dialogerai.repository.repo.ProjectApiKeyRepository;
-import info.mengnan.dialogerai.server.core.DbKnowledgeBaseIndexResolver;
+import info.mengnan.dialogerai.server.core.DefaultAiServiceAssembler;
 import info.mengnan.dialogerai.server.param.chat.ChatRequest;
 import info.mengnan.dialogerai.rag.ChatService;
 import info.mengnan.dialogerai.server.handler.OpenAiStreamingResponseHandler;
 import info.mengnan.dialogerai.server.param.openai.OpenApiChatRequest;
 import info.mengnan.dialogerai.server.service.ImageProcessingService;
-import info.mengnan.dialogerai.server.service.RagAdapterService;
-import info.mengnan.dialogerai.server.service.ToolAdapterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -23,8 +16,6 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import static info.mengnan.dialogerai.rag.config.DefaultModelConfig.DEFAULT_OPTION_ID;
@@ -41,11 +32,8 @@ import static info.mengnan.dialogerai.rag.config.DefaultModelConfig.DEFAULT_SESS
 public class OpenAiCompatibleController {
 
     private final ChatService chatService;
-    private final RagAdapterService ragAdapterService;
-    private final ToolAdapterService toolAdapterService;
     private final ProjectApiKeyRepository projectApiKeyService;
     private final ImageProcessingService imageProcessingService;
-    private final KnowledgeBaseIndexResolver knowledgeBaseIndexResolver;
 
     /**
      * OpenAI 兼容的聊天接口
@@ -90,21 +78,15 @@ public class OpenAiCompatibleController {
 
         return Flux.<String>create(sink -> {
                     try {
-                        // 从数据库查询并组装 AssembledModels
-                        AssembledModels assembledModels = ragAdapterService.assembleModels(chatRequest.getOptionId());
-                        Map<ToolSpecification, ToolExecutor> toolMap = toolAdapterService.dynamicTools(chatRequest.getMemberId());
-                        List<KnowledgeBaseIndexResolver.KbIndexRef> kbIndexRefs = knowledgeBaseIndexResolver.resolveActiveIndexes(chatRequest.getMemberId());
-
                         StreamingResponseHandler handler = new OpenAiStreamingResponseHandler(
                                 sink, requestId, timestamp, model);
 
-                        chatService.chatStreaming(chatRequest.getMemberId(),
-                                chatRequest.getSessionId(),
+                        chatService.chatStreaming(chatRequest.getSessionId(),
                                 chatRequest.getMessage(),
                                 handler,
-                                assembledModels,
-                                toolMap,
-                                kbIndexRefs);
+                                new DefaultAiServiceAssembler(
+                                        chatRequest.getMemberId(),
+                                        chatRequest.getOptionId()));
                     } catch (Exception e) {
                         sink.error(e);
                     }

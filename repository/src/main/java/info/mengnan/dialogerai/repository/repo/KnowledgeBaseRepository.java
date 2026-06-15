@@ -26,10 +26,6 @@ public class KnowledgeBaseRepository {
         return mapper.selectById(id);
     }
 
-    public KnowledgeBase findByIdAndMemberId(Long id, Long memberId) {
-        return mapper.findByIdAndMemberId(id, memberId);
-    }
-
     public List<KnowledgeBase> findByMemberId(Long memberId) {
         return mapper.findByMemberId(memberId);
     }

@@ -9,7 +9,7 @@
       >
         {{ theme.resolvedTheme === 'dark' ? '🌙' : '☀️' }}
       </button>
-      <h1 class="title">AI Talk</h1>
+      <h1 class="title">Dialoger AI</h1>
       <p class="subtitle">登录后与 AI 对话</p>
       <form class="form" @submit.prevent="onSubmit">
         <input

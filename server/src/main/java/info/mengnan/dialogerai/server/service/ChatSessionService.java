@@ -48,30 +48,11 @@ public class ChatSessionService {
         chatSessionRepository.createChat(session);
         return session;
     }
-
-    /**
-     * 若会话标题为默认值且已有足够消息，则生成并持久化标题，返回新标题；否则返回 null。
-     */
-    public String generateTitle(String sessionId) {
-        ChatSession session = chatSessionRepository.findBySessionId(sessionId);
-        if (session == null || !DEFAULT_TITLE.equals(session.getTitle())) {
-            return null;
-        }
-        List<String> contents = chatMessageRepository.findChat(sessionId, List.of(ASSISTANT.n(), USER.n()))
-                .stream()
-                .map(ChatMessage::getContent)
-                .limit(3)
-                .toList();
-        if (contents.size() < 2) {
-            return null;
-        }
-        Map<String, Object> params = Map.of("query", contents);
-        String title = directModelInvoker.directInvoke("conversations.titleGeneration", "title_generation", params);
-        chatSessionRepository.updateChatTitle(sessionId, title);
-        return title;
-    }
-
     public void deleteBySessionId(String sessionId) {
         chatSessionRepository.deleteBySessionId(sessionId);
+    }
+
+    public void updateChatTitle(String sessionId, String title) {
+        chatSessionRepository.updateChatTitle(sessionId, title);
     }
 }

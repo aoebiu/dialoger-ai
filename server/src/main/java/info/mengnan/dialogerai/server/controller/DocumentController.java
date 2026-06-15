@@ -13,6 +13,7 @@ import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.server.param.document.DocumentContentResponse;
 import info.mengnan.dialogerai.server.param.document.DocumentInfoResponse;
 import info.mengnan.dialogerai.server.service.DocumentProcessService;
+import info.mengnan.dialogerai.server.service.KnowledgeBaseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -30,7 +31,7 @@ public class DocumentController {
 
     private final DynamicEmbeddingStoreRegistry embeddingStoreRegistry;
     private final DocumentInfoRepository documentInfoRepository;
-    private final KnowledgeBaseRepository knowledgeBaseRepository;
+    private final KnowledgeBaseService knowledgeBaseService;
     private final DocumentProcessService documentProcessService;
 
     /**
@@ -63,7 +64,7 @@ public class DocumentController {
     @GetMapping("/list")
     public R listDocuments(@RequestParam("kbId") Long kbId) {
         Long memberId = StpUtil.getLoginIdAsLong();
-        KnowledgeBase kb = knowledgeBaseRepository.findByIdAndMemberId(kbId, memberId);
+        KnowledgeBase kb = knowledgeBaseService.findById(kbId, memberId);
         if (kb == null)
             return R.error(ErrorCode.KB_NOT_FOUND);
 

@@ -72,6 +72,7 @@ public class ModelConfigService {
     private ModelConfig buildModelConfig(ChatApiKey apiKey) {
         ModelConfig config = new ModelConfig();
         config.setModelName(apiKey.getModelName());
+        config.setBaseUrl(apiKey.getBaseUrl());
         config.setApiKey(apiKey.getApiKey());
         config.setModelProvider(apiKey.getModelProvider());
         config.setKeyType(apiKey.getKeyType());

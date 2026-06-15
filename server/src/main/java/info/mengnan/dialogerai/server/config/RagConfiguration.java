@@ -6,14 +6,12 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import info.mengnan.dialogerai.rag.ChatService;
 import info.mengnan.dialogerai.rag.config.DefaultModelConfig;
 import info.mengnan.dialogerai.kb.config.ElasticsearchProperties;
-import info.mengnan.dialogerai.rag.container.assemble.AssembledModelsConstruct;
 import info.mengnan.dialogerai.kb.core.DynamicEmbeddingStoreRegistry;
 import info.mengnan.dialogerai.rag.container.factory.CapableModelFactory;
 import info.mengnan.dialogerai.rag.container.factory.UniversalModelFactory;
 import info.mengnan.dialogerai.rag.service.PromptTemplateManager;
 import info.mengnan.dialogerai.rag.injector.RagSourceStore;
 import info.mengnan.dialogerai.rag.service.DirectModelInvoker;
-import info.mengnan.dialogerai.rag.service.SingleModelConfigProvider;
 import info.mengnan.dialogerai.server.service.ModelConfigService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -62,29 +60,18 @@ public class RagConfiguration {
     }
 
     /**
-     * 创建AssembledModelsConstruct
-     */
-    @Bean
-    public AssembledModelsConstruct assembledModelsConstruct() {
-        log.info("Creating AssembledModelsConstruct...");
-        return new AssembledModelsConstruct();
-    }
-
-    /**
      * 创建ChatService
      */
     @Bean
     public ChatService chatService(ChatMemoryStore chatMemoryStore,
                                    UniversalModelFactory modelFactory,
                                    DynamicEmbeddingStoreRegistry embeddingStoreRegistry,
-                                   ModelConfigService modelConfigService,
                                    RagSourceStore ragSourceStore,
                                    @Qualifier("ragExecutor") Executor ragExecutor) {
         log.info("Creating ChatService...");
         return new ChatService(chatMemoryStore,
                 modelFactory,
                 embeddingStoreRegistry,
-                modelConfigService::loadModelConfigs,
                 ragSourceStore,
                 ragExecutor);
     }
