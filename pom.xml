@@ -5,9 +5,9 @@
 
     <groupId>info.mengnan</groupId>
     <artifactId>dialoger-ai</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>${revision}</version>
     <packaging>pom</packaging>
-    <name>DialogerAI</name>
+    <name>DialogerAI ${project.version}</name>
     <description>DialogerAI parent project</description>
 
     <modules>
@@ -21,6 +21,7 @@
     </modules>
 
     <properties>
+        <revision>0.0.1-SNAPSHOT</revision>
         <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>17</maven.compiler.source>

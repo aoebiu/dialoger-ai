@@ -7,15 +7,14 @@
     <parent>
         <groupId>info.mengnan</groupId>
         <artifactId>dialoger-ai</artifactId>
-        <version>0.0.1-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>distribution</artifactId>
     <packaging>pom</packaging>
-    <name>Dialoger AI Distribution</name>
+    <name>distribution</name>
     <description>
-        Distribution module — assembles the Dialoger AI server into a deployable release package.
-        Contains no business logic; only assembly descriptors, startup scripts, and configuration templates.
+        assembles the Dialoger AI server into a deployable release package
     </description>
 
     <!--
