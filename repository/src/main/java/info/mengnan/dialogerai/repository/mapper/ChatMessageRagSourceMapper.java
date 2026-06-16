@@ -23,7 +23,7 @@ public interface ChatMessageRagSourceMapper extends BaseMapper<ChatMessageRagSou
                 .eq(ChatMessageRagSource::getMessageId, messageId));
     }
 
-    default List<ChatMessageRagSource> find(List<Long> ids) {
+    default List<ChatMessageRagSource> findRagSources(List<Long> ids) {
         if (ids == null || ids.isEmpty()) return List.of();
         return selectList(new LambdaQueryWrapper<ChatMessageRagSource>()
                 .in(ChatMessageRagSource::getId, ids));
@@ -36,7 +36,7 @@ public interface ChatMessageRagSourceMapper extends BaseMapper<ChatMessageRagSou
                 .isNotNull(ChatMessageRagSource::getMessageId));
     }
 
-    default List<ChatMessageRagSource> find(String sessionId) {
+    default List<ChatMessageRagSource> findBySessionId(String sessionId) {
         return selectList(new LambdaQueryWrapper<ChatMessageRagSource>()
                 .eq(ChatMessageRagSource::getSessionId, sessionId)
                 .isNotNull(ChatMessageRagSource::getMessageId));

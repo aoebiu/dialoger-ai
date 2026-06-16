@@ -1,12 +1,14 @@
 package info.mengnan.dialogerai.server.service;
 
 import info.mengnan.dialogerai.repository.entity.ChatMessage;
+import info.mengnan.dialogerai.repository.entity.ChatMessageRagSource;
 import info.mengnan.dialogerai.repository.repo.ChatMessageRagSourceRepository;
 import info.mengnan.dialogerai.repository.repo.ChatMessageRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -40,5 +42,17 @@ public class ChatMessageService {
     public ChatMessage save(ChatMessage chatMessage) {
         chatMessageRepository.insert(chatMessage);
         return chatMessage;
+    }
+
+    public List<Long> findRagSourceIds(Long messageId) {
+        return chatMessageRagSourceRepository.findIdsForMessage(messageId);
+    }
+
+    public Map<Long, List<Long>> findRagSourceIdMap(String sessionId) {
+        return chatMessageRagSourceRepository.findRagSourceIdMap(sessionId);
+    }
+
+    public List<ChatMessageRagSource> findRagSources(List<Long> ids) {
+        return chatMessageRagSourceRepository.findRagSources(ids);
     }
 }

@@ -23,8 +23,8 @@ public class ChatMessageRagSourceRepository {
         mapper.linkToMessage(sessionId, messageId);
     }
 
-    public List<ChatMessageRagSource> find(List<Long> ids) {
-        return mapper.find(ids);
+    public List<ChatMessageRagSource> findRagSources(List<Long> ids) {
+        return mapper.findRagSources(ids);
     }
 
     public List<Long> findIdsForMessage(Long messageId) {
@@ -42,7 +42,7 @@ public class ChatMessageRagSourceRepository {
     }
 
     public Map<Long, List<ChatMessageRagSource>> findGroupedByMessage(String sessionId) {
-        return mapper.find(sessionId).stream()
+        return mapper.findBySessionId(sessionId).stream()
                 .collect(Collectors.groupingBy(ChatMessageRagSource::getMessageId));
     }
 
