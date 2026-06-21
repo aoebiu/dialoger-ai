@@ -28,22 +28,16 @@ import java.util.List;
 import java.util.Map;
 import static info.mengnan.dialogerai.common.param.MessageRole.*;
 import static info.mengnan.dialogerai.rag.config.DefaultModelConfig.DEFAULT_SESSION;
-import static info.mengnan.dialogerai.rag.constant.promptTemplate.PromptTemplateConstant.CONTENT_INJECTION_SEPARATOR;
-import static info.mengnan.dialogerai.rag.constant.promptTemplate.PromptTemplateConstant.CONTENT_INJECTOR_PROMPT_TEMPLATE;
 
 @Component
 @RequiredArgsConstructor
 public class PersistentChatMemoryStore implements ChatMemoryStore {
-
-    private static final ContentInjector CONTENT_INJECTOR =
-            new DefaultContentInjector(CONTENT_INJECTOR_PROMPT_TEMPLATE);
 
     private final ChatMessageRepository chatMessageService;
     private final ChatHistoryCompressing compressing;
     private final TokenCounting tokenCounting;
     private final RagSourceStore ragSourceStore;
     private final ToolExecutionStore toolExecutionStore;
-    private final ChatMessageRagSourceRepository chatMessageRagSourceRepository;
 
     @Override
     public List<dev.langchain4j.data.message.ChatMessage> getMessages(Object memoryId) {
@@ -72,57 +66,10 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
             filtered.addAll(dbMessages);
         }
 
-        // 已关联消息 ID 的（历史对话的 RAG 内容，关联的是 ASSISTANT 消息 ID）
-        Map<Long, List<ChatMessageRagSource>> ragSourceByAssistantId = chatMessageRagSourceRepository.findGroupedByMessage(sessionId);
-        // message_id 为 null 的 pending 记录（当前最新一轮的 RAG 内容）
-        List<ChatMessageRagSource> pendingRagSources = chatMessageRagSourceRepository.findPending(sessionId);
-
-        boolean pendingRagUsed = false;
         List<dev.langchain4j.data.message.ChatMessage> result = new ArrayList<>();
-        // 先收集所有ASSISTANT消息的RAG来源映射（按消息ID）
-        Map<Long, List<ChatMessageRagSource>> ragSourceByMessageId = new HashMap<>();
-        if (ragSourceByAssistantId != null) {
-            ragSourceByMessageId.putAll(ragSourceByAssistantId);
-        }
-
-        for (int i = 0; i < filtered.size(); i++) {
-            ChatMessage chatMessage = filtered.get(i);
-            String role = chatMessage.getRole();
-
-            if (USER.equals(role)) {
-                // 获取当前USER消息的RAG来源
-                List<ChatMessageRagSource> ragSources = null;
-
-                // 检查下一条消息是否是ASSISTANT
-                if (i + 1 < filtered.size() && ASSISTANT.equals(filtered.get(i + 1).getRole())) {
-                    // 如果下一条是ASSISTANT，获取该ASSISTANT对应的RAG来源
-                    ChatMessage nextAssistant = filtered.get(i + 1);
-                    ragSources = ragSourceByMessageId.get(nextAssistant.getId());
-                }
-                else if (i == filtered.size() - 1 ||
-                        (i + 1 < filtered.size() && !ASSISTANT.equals(filtered.get(i + 1).getRole()))) {
-                    // 如果这是最新的USER消息,使用pendingRagSources
-                    if (pendingRagSources != null && !pendingRagSources.isEmpty() && !pendingRagUsed) {
-                        ragSources = pendingRagSources;
-                        pendingRagUsed = true;
-                    }
-                }
-
-                // 如果有RAG来源,注入到USER消息中
-                dev.langchain4j.data.message.ChatMessage userMessage;
-                if (ragSources != null && !ragSources.isEmpty()) {
-                    ChatMessage enrichedUserMessage = withRagContent(chatMessage, ragSources);
-                    userMessage = convertToChatMessage(enrichedUserMessage);
-                } else {
-                    userMessage = convertToChatMessage(chatMessage);
-                }
-                result.add(userMessage);
-            }
-            else {
-                // 其他消息直接转换添加
-                dev.langchain4j.data.message.ChatMessage converted = convertToChatMessage(chatMessage);
-                result.add(converted);
-            }
+        for (ChatMessage chatMessage : filtered) {
+            dev.langchain4j.data.message.ChatMessage userMessage = convertToChatMessage(chatMessage);
+            result.add(userMessage);
         }
 
         return result;
@@ -141,11 +88,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
 
         if (chatMessage instanceof UserMessage msg) {
             dbMessage.setRole(USER.n());
-            String rawContent = msg.singleText();
-
-            int sepIdx = rawContent.indexOf(CONTENT_INJECTION_SEPARATOR);
-            dbMessage.setContent(sepIdx != -1 ? rawContent.substring(0, sepIdx) : rawContent);
-
+            dbMessage.setContent(msg.singleText());
             dbMessage.setExtras(buildUserExtras(msg));
             chatMessageService.insert(dbMessage);
 
@@ -237,26 +180,6 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         return ex;
     }
 
-    private static ChatMessage withRagContent(ChatMessage original, List<ChatMessageRagSource> sources) {
-        List<Content> contents = sources.stream()
-                .map(s -> Content.from(TextSegment.from(s.getContent())))
-                .toList();
-        String text = original.getContent() != null ? original.getContent() : "";
-        ChatMessageExtras ex = original.getExtras();
-        UserMessage base = (ex != null && ex.getUserName() != null && !ex.getUserName().isBlank())
-                ? UserMessage.from(ex.getUserName(), text)
-                : UserMessage.from(text);
-        // 走与 CapturingContentInjector 完全相同的注入路径，格式由库保证一致
-        UserMessage injected = (UserMessage) CONTENT_INJECTOR.inject(contents, base);
-        ChatMessage copy = new ChatMessage();
-        copy.setId(original.getId());
-        copy.setSessionId(original.getSessionId());
-        copy.setRole(original.getRole());
-        copy.setContent(injected.singleText());
-        copy.setExtras(original.getExtras());
-        copy.setCreatedAt(original.getCreatedAt());
-        return copy;
-    }
 
     private void saveCompressedSummary(String sessionId, String summary, List<ChatMessage> originalMessages) {
         ChatMessage lastMsg = originalMessages.get(originalMessages.size() - 1);

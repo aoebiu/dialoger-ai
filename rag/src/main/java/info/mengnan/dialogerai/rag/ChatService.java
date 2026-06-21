@@ -65,20 +65,20 @@ public class ChatService {
     /**
      * 流式RAG对话 - 使用回调处理器
      *
-     * @param sessionId       会话id
-     * @param message         消息
-     * @param handler         流式响应处理器
+     * @param sessionId 会话id
+     * @param message   消息
+     * @param handler   流式响应处理器
      */
     public void chatStreaming(String sessionId,
                               String message,
                               StreamingResponseHandler handler,
-                              AiServiceAssembler<?> aiServiceAssembler) {
-        AiServiceAssembler.AiComponents<?> aiComponents = aiServiceAssembler.assemble();
+                              AiServiceAssembler<? extends KbContext> aiServiceAssembler) {
+        AiServiceAssembler.AiComponents<? extends KbContext> aiComponents = aiServiceAssembler.assemble();
         AssembledModels assembledModels = aiComponents.assembledModels();
         Map<ModelType, ModelConfig> configs = assembledModels.getConfigs();
 
-        AssistantUnique assistantUnique = new AssistantUniqueBuilder()
-                .configureRag(assembledModels, aiComponents.kbContext(), sessionId, embeddingStoreRegistry)
+        AssistantUnique assistantUnique = new AssistantUniqueBuilder(modelFactory)
+                .configureRag(assembledModels, aiComponents.kbContext(), embeddingStoreRegistry, ragSourceStore, ragExecutor, sessionId)
                 .configureStreamingChatModel(configs.get(STREAMING_CHAT))
                 .configureChatModel(configs.get(CHAT))
                 .configureModerationModel(configs.get(MODERATION))
@@ -110,17 +110,26 @@ public class ChatService {
 
     public class AssistantUniqueBuilder {
         private final AiServices<AssistantUnique> aiServices;
+        private final UniversalModelFactory modelFactory;
 
-        private AssistantUniqueBuilder() {
-            aiServices = AiServices.builder(AssistantUnique.class);
+        private AssistantUniqueBuilder(UniversalModelFactory modelFactory) {
+            this.modelFactory = modelFactory;
+            this.aiServices = AiServices.builder(AssistantUnique.class);
         }
 
-        private AssistantUniqueBuilder configureRag(AssembledModels assembledModels, List<? extends KbContext> kbContexts, String sessionId, DynamicEmbeddingStoreRegistry embeddingStoreRegistry) {
+        private AssistantUniqueBuilder configureRag(AssembledModels assembledModels,
+                                                    List<? extends KbContext> kbContexts,
+                                                    DynamicEmbeddingStoreRegistry embeddingStoreRegistry,
+                                                    RagSourceStore ragSourceStore,
+                                                    Executor ragExecutor,
+                                                    String sessionId) {
             if (!assembledModels.getRag()) {
                 return this;
             }
+            aiServices.storeRetrievedContentInChatMemory(false);
             DefaultRetrievalAugmentor.DefaultRetrievalAugmentorBuilder ragBuilder = DefaultRetrievalAugmentor.builder();
             ragBuilder.executor(ragExecutor);
+
 
             if (assembledModels.getContentAggregator()) {
                 ragBuilder.contentAggregator(createContentAggregator(assembledModels.getConfigs().get(SCORING)));
@@ -235,7 +244,9 @@ public class ChatService {
             return new LanguageModelQueryRouter(chatModel, retrieverToKbName, QUERY_ROUTER_PROMPT_TEMPLATE, DO_NOT_ROUTE);
         }
 
-        private ContentRetriever createContentRetriever(KbIndexRef ref, EmbeddingModel embeddingModel, DynamicEmbeddingStoreRegistry embeddingStoreRegistry) {
+        private ContentRetriever createContentRetriever(KbIndexRef ref,
+                                                                 EmbeddingModel embeddingModel,
+                                                                 DynamicEmbeddingStoreRegistry embeddingStoreRegistry) {
             try {
                 EmbeddingStore<TextSegment> embeddingStore = embeddingStoreRegistry.createEmbeddingStore(ref.indexName());
                 ContentRetriever baseRetriever = EmbeddingStoreContentRetriever.builder()
