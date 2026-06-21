@@ -49,9 +49,16 @@ public interface ChatMessageRagSourceMapper extends BaseMapper<ChatMessageRagSou
     }
 
     default void deleteByMessageIdGreaterThanOrEqual(String sessionId, Long messageId) {
-        update(null, new LambdaUpdateWrapper<ChatMessageRagSource>()
-                .set(ChatMessageRagSource::getMessageId, null)
+        delete(new LambdaQueryWrapper<ChatMessageRagSource>()
                 .eq(ChatMessageRagSource::getSessionId, sessionId)
-                .lt(ChatMessageRagSource::getMessageId, messageId));
+                .ge(ChatMessageRagSource::getMessageId, messageId));
+        delete(new LambdaQueryWrapper<ChatMessageRagSource>()
+                .eq(ChatMessageRagSource::getSessionId, sessionId)
+                .isNull(ChatMessageRagSource::getMessageId));
+    }
+
+    default int deleteBySessionId(String sessionId) {
+        return delete(new LambdaQueryWrapper<ChatMessageRagSource>()
+                .eq(ChatMessageRagSource::getSessionId, sessionId));
     }
 }

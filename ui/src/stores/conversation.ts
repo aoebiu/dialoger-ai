@@ -14,11 +14,19 @@ export interface RagSource {
   indexName?: string
   text: string
 }
+export interface ToolExecution {
+  id?: number
+  toolCallId?: string
+  toolName: string
+  arguments?: string
+  result?: string
+}
 export interface MessageItem {
   id?: number
   role: MessageRole
   content: string
-  ragSources?: RagSource[] // 已加载的知识库来源（懒加载或历史恢复时批量填充）
+  ragSources?: RagSource[]
+  toolExecutions?: ToolExecution[]
 }
 
 const STORAGE_KEY_SESSION = 'ai-talk-current-session'
@@ -73,13 +81,21 @@ export const useConversationStore = defineStore('conversation', () => {
     messagesCache.value[sessionId] = newMessages
   }
 
-  /** 请求服务端生成/返回对话标题并更新（在第一次 AI 回复完成后调用），返回该轮 rag source ids */
-  function fetchConversationTitle(sessionId: string): Promise<number[] | undefined> {
-    return $get<{ title?: string; sourceIds?: number[] }>(`/chat/conversations?sessionId=${sessionId}`)
+  /** 请求服务端生成/返回对话标题并更新，返回该轮 rag / tool 记录 ids */
+  function fetchConversationTitle(sessionId: string): Promise<{
+    sourceIds?: number[]
+    toolExecutionIds?: number[]
+  } | undefined> {
+    return $get<{ title?: string; sourceIds?: number[]; toolExecutionIds?: number[] }>(
+      `/chat/conversations?sessionId=${sessionId}`
+    )
       .then((res) => {
         const title = res.data?.title ?? (res as { title?: string }).title
         if (title) updateTitle(sessionId, title)
-        return res.data?.sourceIds
+        return {
+          sourceIds: res.data?.sourceIds,
+          toolExecutionIds: res.data?.toolExecutionIds,
+        }
       })
       .catch((e) => { console.error(e); return undefined })
   }

@@ -106,6 +106,19 @@
                   {{ kbName }}
                 </button>
               </div>
+              <!-- 工具调用标记 -->
+              <div v-if="m.role === 'assistant' && m.toolExecutions?.length" class="tool-badges">
+                <button
+                  v-for="(exec, ei) in m.toolExecutions"
+                  :key="exec.id ?? `${exec.toolName}-${ei}`"
+                  type="button"
+                  class="tool-badge"
+                  @click="handleToolBadgeClick(exec)"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                  {{ exec.toolName }}
+                </button>
+              </div>
               <div v-if="m.role === 'user' && !streaming" class="message-actions">
                 <button type="button" class="action-btn" title="重新生成" @click="handleRegenerate(i)">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
@@ -157,19 +170,30 @@
         </div>
       </div>
     </Teleport>
+
+    <ToolExecutionModal :execution="toolModal" @close="toolModal = null" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import ToolExecutionModal from '@/components/ToolExecutionModal.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useConversationStore } from '@/stores/conversation'
-import type { RagSource } from '@/stores/conversation'
+import type { RagSource, ToolExecution } from '@/stores/conversation'
 import { marked } from 'marked'
 import hljs from 'highlight.js/lib/common'
-import { createChat, chatStream, getHistory, getSessions, deleteSession, getRagSourcesLatest, getRagSources } from '@/api/chat'
+import {
+  createChat,
+  chatStream,
+  getHistory,
+  getSessions,
+  deleteSession,
+  getRagSources,
+  getToolExecutions,
+} from '@/api/chat'
 import type { HistoryMessage, HistoryData, HistoryResponse, SessionItem } from '@/api/chat'
 
 marked.setOptions({ gfm: true, breaks: true })
@@ -320,6 +344,7 @@ const loadingHistory = ref(false)
 const editingIndex = ref<number | null>(null)
 const editText = ref('')
 const ragModal = ref<RagSource[] | null>(null)
+const toolModal = ref<ToolExecution | null>(null)
 let abortStream: (() => void) | null = null
 
 // 打字机效果：后端 chunk 先入缓冲，再逐字显示；缓冲多时加快间隔
@@ -359,14 +384,8 @@ function flushOneChar() {
       const messages = conv.currentMessages
       if (messages.length === 2 && messages[1]?.role === 'assistant') {
         const assistantIdx = messages.length - 1
-        conv.fetchConversationTitle(sid).then((sourceIds) => {
-          if (sourceIds?.length) {
-            getRagSources(sourceIds).then((sourcesRes) => {
-              if (sourcesRes.success && sourcesRes.data?.sources?.length) {
-                conv.patchMessage(sid, assistantIdx, { ragSources: sourcesRes.data.sources })
-              }
-            }).catch(() => {})
-          }
+        conv.fetchConversationTitle(sid).then((meta) => {
+          patchAssistantMeta(sid, assistantIdx, meta?.sourceIds, meta?.toolExecutionIds)
         })
       }
     }
@@ -382,40 +401,68 @@ function startTypewriterIfNeeded() {
   typewriterTimerId = setTimeout(flushOneChar, ms)
 }
 
-/** 从 getHistory 返回的 data 中解析出消息列表和 ragSourceMap */
+/** 从 getHistory 返回的 data 中解析出消息列表和 rag / tool 映射 */
 function parseHistoryMessages(data: HistoryData | undefined): {
   messages: import('@/stores/conversation').MessageItem[]
   ragSourceMap: Record<string, number[]>
+  toolExecutionMap: Record<string, number[]>
 } {
   const rawList = Array.isArray(data) ? data : ((data as HistoryResponse)?.messages ?? [])
   const ragSourceMap: Record<string, number[]> =
     (!Array.isArray(data) ? (data as HistoryResponse)?.ragSourceMap : undefined) ?? {}
+  const toolExecutionMap: Record<string, number[]> =
+    (!Array.isArray(data) ? (data as HistoryResponse)?.toolExecutionMap : undefined) ?? {}
   const messages = (rawList as HistoryMessage[])
     .filter((m) => (m.role || '').toUpperCase() !== 'SYSTEM')
     .map((m) => {
       const role = ((m.role || 'user').toUpperCase() === 'USER' ? 'user' : 'assistant') as 'user' | 'assistant'
       return { id: m.id, role, content: m.content ?? '' }
     })
-  return { messages, ragSourceMap }
+  return { messages, ragSourceMap, toolExecutionMap }
+}
+
+/** 从服务端历史记录同步消息 id（本地 append 的消息没有 id，重新生成需要 fromMessageId） */
+async function syncMessageIds(sessionId: string) {
+  try {
+    const res = await getHistory(sessionId)
+    if (!res.success || !res.data) return
+    const { messages: serverMessages } = parseHistoryMessages(res.data)
+    const local = conv.currentMessages
+    if (!local.length || !serverMessages.length) return
+    const next = [...local]
+    let changed = false
+    for (let i = 0; i < Math.min(next.length, serverMessages.length); i++) {
+      const localMsg = next[i]
+      const serverMsg = serverMessages[i]
+      if (
+        localMsg?.id == null &&
+        serverMsg?.id != null &&
+        localMsg?.role === serverMsg.role
+      ) {
+        next[i] = { ...localMsg, id: serverMsg.id }
+        changed = true
+      }
+    }
+    if (changed) conv.setMessages(sessionId, next)
+  } catch (e) {
+    console.error('[ChatView] syncMessageIds failed:', e)
+  }
 }
 
 /** 批量拉取 rag sources 并按 messageId 挂载到消息列表 */
 async function attachRagSources(
-  sessionId: string,
   messages: import('@/stores/conversation').MessageItem[],
   ragSourceMap: Record<string, number[]>
 ) {
   const allIds = Object.values(ragSourceMap).flat()
-  if (!allIds.length) return
+  if (!allIds.length) return messages
   try {
     const res = await getRagSources(allIds)
-    if (!res.success || !res.data?.sources?.length) return
-    // 构建 sourceId → messageId 反向映射
+    if (!res.success || !res.data?.sources?.length) return messages
     const sourceToMsg: Record<number, number> = {}
     for (const [msgIdStr, ids] of Object.entries(ragSourceMap)) {
       for (const id of ids) sourceToMsg[id] = Number(msgIdStr)
     }
-    // 按 messageId 分组
     const msgIdToSources: Record<number, RagSource[]> = {}
     for (const src of res.data.sources) {
       if (src.id == null) continue
@@ -424,11 +471,86 @@ async function attachRagSources(
       msgIdToSources[msgId] ??= []
       msgIdToSources[msgId].push(src)
     }
-    const patched = messages.map((m) =>
+    return messages.map((m) =>
       m.id && msgIdToSources[m.id] ? { ...m, ragSources: msgIdToSources[m.id] } : m
     )
-    conv.setMessages(sessionId, patched)
+  } catch {
+    return messages
+  }
+}
+
+/** 批量拉取 tool executions 并按 messageId 挂载到消息列表 */
+async function attachToolExecutions(
+  messages: import('@/stores/conversation').MessageItem[],
+  toolExecutionMap: Record<string, number[]>
+) {
+  const allIds = Object.values(toolExecutionMap).flat()
+  if (!allIds.length) return messages
+  try {
+    const res = await getToolExecutions(allIds)
+    if (!res.success || !res.data?.executions?.length) return messages
+    const execToMsg: Record<number, number> = {}
+    for (const [msgIdStr, ids] of Object.entries(toolExecutionMap)) {
+      for (const id of ids) execToMsg[id] = Number(msgIdStr)
+    }
+    const msgIdToExecutions: Record<number, ToolExecution[]> = {}
+    for (const exec of res.data.executions) {
+      if (exec.id == null) continue
+      const msgId = execToMsg[exec.id]
+      if (msgId == null) continue
+      msgIdToExecutions[msgId] ??= []
+      msgIdToExecutions[msgId].push(exec)
+    }
+    return messages.map((m) =>
+      m.id && msgIdToExecutions[m.id] ? { ...m, toolExecutions: msgIdToExecutions[m.id] } : m
+    )
+  } catch {
+    return messages
+  }
+}
+
+async function attachMessageMeta(
+  sessionId: string,
+  messages: import('@/stores/conversation').MessageItem[],
+  ragSourceMap: Record<string, number[]>,
+  toolExecutionMap: Record<string, number[]>
+) {
+  let patched = await attachRagSources(messages, ragSourceMap)
+  patched = await attachToolExecutions(patched, toolExecutionMap)
+  conv.setMessages(sessionId, patched)
+}
+
+/** 拉取并挂载单条 assistant 消息的 rag / tool 元数据 */
+async function patchAssistantMeta(
+  sessionId: string,
+  assistantIdx: number,
+  sourceIds?: number[],
+  toolExecutionIds?: number[]
+) {
+  const patch: Partial<import('@/stores/conversation').MessageItem> = {}
+  try {
+    if (sourceIds?.length) {
+      const sourcesRes = await getRagSources(sourceIds)
+      if (sourcesRes.success && sourcesRes.data?.sources?.length) {
+        patch.ragSources = sourcesRes.data.sources
+      }
+    }
+    if (toolExecutionIds?.length) {
+      const execRes = await getToolExecutions(toolExecutionIds)
+      if (execRes.success && execRes.data?.executions?.length) {
+        patch.toolExecutions = execRes.data.executions
+      }
+    }
+    if (Object.keys(patch).length) {
+      conv.patchMessage(sessionId, assistantIdx, patch)
+    }
   } catch {}
+}
+
+/** 非首轮对话完成后拉取最新 assistant 的 rag / tool 元数据 */
+async function fetchLatestAssistantMeta(sessionId: string, assistantIdx: number) {
+  const meta = await conv.fetchConversationTitle(sessionId).catch(() => undefined)
+  await patchAssistantMeta(sessionId, assistantIdx, meta?.sourceIds, meta?.toolExecutionIds)
 }
 
 onMounted(async () => {
@@ -460,9 +582,9 @@ onMounted(async () => {
       try {
         const res = await getHistory(sessionId)
         if (res.success && res.data) {
-          const { messages, ragSourceMap } = parseHistoryMessages(res.data)
+          const { messages, ragSourceMap, toolExecutionMap } = parseHistoryMessages(res.data)
           conv.setMessages(sessionId, messages)
-          await attachRagSources(sessionId, messages, ragSourceMap)
+          await attachMessageMeta(sessionId, messages, ragSourceMap, toolExecutionMap)
         }
       } catch (e) {
         console.error('拉取对话历史失败:', e)
@@ -511,9 +633,9 @@ async function handleSelectConversation(sessionId: string) {
   try {
     const res = await getHistory(sessionId)
     if (res.success && res.data) {
-      const { messages, ragSourceMap } = parseHistoryMessages(res.data)
+      const { messages, ragSourceMap, toolExecutionMap } = parseHistoryMessages(res.data)
       conv.setMessages(sessionId, messages)
-      await attachRagSources(sessionId, messages, ragSourceMap)
+      await attachMessageMeta(sessionId, messages, ragSourceMap, toolExecutionMap)
     } else {
       conv.setMessages(sessionId, [])
     }
@@ -526,9 +648,10 @@ async function handleSelectConversation(sessionId: string) {
 }
 
 /** 从指定索引截断消息，重新发送 text 并流式获取 AI 回复 */
-function resendFrom(index: number, text: string) {
+async function resendFrom(index: number, text: string) {
   const sessionId = conv.currentId
   if (!sessionId || streaming.value) return
+  await syncMessageIds(sessionId)
   const fromMessageId = conv.currentMessages[index]?.id
   if (fromMessageId == null) {
     console.warn('[ChatView] fromMessageId is null/undefined, regenerate will not delete messages on server')
@@ -549,30 +672,16 @@ function resendFrom(index: number, text: string) {
     () => {
       streaming.value = false
       abortStream = null
+      syncMessageIds(sessionId).catch(() => {})
       const isFirstMessage = conv.currentMessages.length === 2 && conv.currentMessages[1]?.role === 'assistant'
       if (!isFirstMessage) {
-        // 非首轮：单独拉取 rag source ids
-        getRagSourcesLatest(sessionId).then((res) => {
-          if (res.success && res.data?.sourceIds?.length) {
-            getRagSources(res.data.sourceIds).then((sourcesRes) => {
-              if (sourcesRes.success && sourcesRes.data?.sources?.length) {
-                conv.patchMessage(sessionId, assistantMsgIdx, { ragSources: sourcesRes.data.sources })
-              }
-            }).catch(() => {})
-          }
-        }).catch(() => {})
+        fetchLatestAssistantMeta(sessionId, assistantMsgIdx).catch(() => {})
       }
       if (typewriterBuffer === '' && typewriterTimerId === null) {
         const messages = conv.currentMessages
         if (messages.length === 2 && messages[1]?.role === 'assistant' && sessionId) {
-          conv.fetchConversationTitle(sessionId).then((sourceIds) => {
-            if (sourceIds?.length) {
-              getRagSources(sourceIds).then((sourcesRes) => {
-                if (sourcesRes.success && sourcesRes.data?.sources?.length) {
-                  conv.patchMessage(sessionId, assistantMsgIdx, { ragSources: sourcesRes.data.sources })
-                }
-              }).catch(() => {})
-            }
+          conv.fetchConversationTitle(sessionId).then((meta) => {
+            patchAssistantMeta(sessionId, assistantMsgIdx, meta?.sourceIds, meta?.toolExecutionIds)
           })
         }
       }
@@ -640,6 +749,10 @@ function handleRagBadgeClick(sources: RagSource[], kbName: string) {
   ragModal.value = sources.filter((s) => (s.kbName || s.indexName || '知识库') === kbName)
 }
 
+function handleToolBadgeClick(execution: ToolExecution) {
+  toolModal.value = execution
+}
+
 function send() {
   const text = inputText.value.trim()
   const sessionId = conv.currentId
@@ -667,31 +780,17 @@ function send() {
     () => {
       streaming.value = false
       abortStream = null
+      syncMessageIds(sessionId).catch(() => {})
       const isFirstMessage = conv.currentMessages.length === 2 && conv.currentMessages[1]?.role === 'assistant'
       if (!isFirstMessage) {
-        // 非首轮：单独拉取 rag source ids
-        getRagSourcesLatest(sessionId).then((res) => {
-          if (res.success && res.data?.sourceIds?.length) {
-            getRagSources(res.data.sourceIds).then((sourcesRes) => {
-              if (sourcesRes.success && sourcesRes.data?.sources?.length) {
-                conv.patchMessage(sessionId, assistantMsgIdx, { ragSources: sourcesRes.data.sources })
-              }
-            }).catch(() => {})
-          }
-        }).catch(() => {})
+        fetchLatestAssistantMeta(sessionId, assistantMsgIdx).catch(() => {})
       }
       // 缓冲未打完时由 flushOneChar 继续打完再结束；已打完则这里直接触发标题拉取
       if (typewriterBuffer === '' && typewriterTimerId === null) {
         const messages = conv.currentMessages
         if (messages.length === 2 && messages[1]?.role === 'assistant' && sessionId) {
-          conv.fetchConversationTitle(sessionId).then((sourceIds) => {
-            if (sourceIds?.length) {
-              getRagSources(sourceIds).then((sourcesRes) => {
-                if (sourcesRes.success && sourcesRes.data?.sources?.length) {
-                  conv.patchMessage(sessionId, assistantMsgIdx, { ragSources: sourcesRes.data.sources })
-                }
-              }).catch(() => {})
-            }
+          conv.fetchConversationTitle(sessionId).then((meta) => {
+            patchAssistantMeta(sessionId, assistantMsgIdx, meta?.sourceIds, meta?.toolExecutionIds)
           })
         }
       }
@@ -1090,6 +1189,36 @@ function send() {
 .rag-badge:hover {
   color: var(--color-text-accent);
   border-color: var(--color-text-accent);
+}
+
+/* 工具调用标记 */
+.tool-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+
+.tool-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #8b5cf6;
+  cursor: pointer;
+  padding: 0.22rem 0.62rem;
+  border-radius: 999px;
+  border: 1px solid rgba(139, 92, 246, 0.22);
+  background: rgba(139, 92, 246, 0.08);
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+
+.tool-badge:hover {
+  color: #7c3aed;
+  border-color: rgba(124, 58, 237, 0.35);
+  background: rgba(139, 92, 246, 0.14);
+  transform: translateY(-1px);
 }
 
 /* 弹框遮罩 */

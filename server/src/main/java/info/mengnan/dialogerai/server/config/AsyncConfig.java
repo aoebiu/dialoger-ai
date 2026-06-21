@@ -29,6 +29,16 @@ public class AsyncConfig implements WebMvcConfigurer {
                 new ThreadPoolExecutor.CallerRunsPolicy());
     }
 
+
+    @Bean("toolExecutor")
+    public Executor toolExecutor() {
+        return new ThreadPoolExecutor(
+                Runtime.getRuntime().availableProcessors(),
+                Runtime.getRuntime().availableProcessors() * 2, 2,
+                TimeUnit.MINUTES, new LinkedBlockingDeque<>(256),
+                new ThreadPoolExecutor.CallerRunsPolicy());
+    }
+
     /**
      * 文档处理专用线程池。
      * 核心线程2个保证并发，最大4个应对突发，队列50控制背压。

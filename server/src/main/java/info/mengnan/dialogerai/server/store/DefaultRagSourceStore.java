@@ -10,7 +10,7 @@ import java.util.List;
 
 @Component
 @RequiredArgsConstructor
-public class DbRagSourceStore implements RagSourceStore {
+public class DefaultRagSourceStore implements RagSourceStore {
 
     private final ChatMessageRagSourceRepository repository;
 

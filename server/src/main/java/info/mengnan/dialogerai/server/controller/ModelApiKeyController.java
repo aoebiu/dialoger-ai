@@ -84,7 +84,7 @@ public class ModelApiKeyController {
      * 删除模型 API Key
      */
     @DeleteMapping("/{id}")
-    public R deleteApiKey(@PathVariable Long id) {
+    public R deleteApiKey(@PathVariable(name = "id") Long id) {
         Long memberId = StpUtil.getLoginIdAsLong();
 
         ChatApiKey chatApiKey = chatApiKeyService.findById(id);

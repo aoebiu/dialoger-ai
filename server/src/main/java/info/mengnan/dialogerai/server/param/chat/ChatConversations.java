@@ -10,6 +10,7 @@ public class ChatConversations {
     private Long memberId;
     private String title;
     private List<Long> sourceIds;
+    private List<Long> toolExecutionIds;
 
 
     public ChatConversations(Long memberId, String sessionId) {

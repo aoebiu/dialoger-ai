@@ -16,6 +16,7 @@ import info.mengnan.dialogerai.repository.entity.ChatMessageRagSource;
 import info.mengnan.dialogerai.repository.repo.ChatMessageRagSourceRepository;
 import info.mengnan.dialogerai.repository.repo.ChatMessageRepository;
 import info.mengnan.dialogerai.rag.injector.RagSourceStore;
+import info.mengnan.dialogerai.tool.ToolExecutionStore;
 import info.mengnan.dialogerai.server.core.ChatHistoryCompressing;
 import info.mengnan.dialogerai.server.core.TokenCounting;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     private final ChatHistoryCompressing compressing;
     private final TokenCounting tokenCounting;
     private final RagSourceStore ragSourceStore;
+    private final ToolExecutionStore toolExecutionStore;
     private final ChatMessageRagSourceRepository chatMessageRagSourceRepository;
 
     @Override
@@ -155,6 +157,9 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
             chatMessageService.insert(dbMessage);
 
             ragSourceStore.linkToMessage(sessionId, dbMessage.getId());
+            if (!msg.hasToolExecutionRequests()) {
+                toolExecutionStore.linkToMessage(sessionId, dbMessage.getId());
+            }
 
         } else if (chatMessage instanceof SystemMessage msg) {
             dbMessage.setRole(SYSTEM.n());
@@ -176,7 +181,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
             }
             if (summary > 1500) {
                 String compressRes = compressing.compressHistory(chats);
-                saveCompressedSummary(sessionId, compressRes, chats);
+                // saveCompressedSummary(sessionId, compressRes, chats);
             }
         }
     }

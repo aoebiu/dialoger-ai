@@ -14,4 +14,6 @@ public class ChatHistoryResponse {
     private List<ChatMessage> messages;
 
     private Map<Long, List<Long>> ragSourceMap;
+
+    private Map<Long, List<Long>> toolExecutionMap;
 }

@@ -31,10 +31,13 @@ import info.mengnan.dialogerai.rag.container.assemble.AssembledModels;
 import info.mengnan.dialogerai.rag.container.factory.UniversalModelFactory;
 import info.mengnan.dialogerai.rag.handler.StreamingResponseHandler;
 import info.mengnan.dialogerai.rag.injector.CapturingContentInjector;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.service.tool.ToolExecutor;
 import info.mengnan.dialogerai.rag.container.assemble.KbContext;
 import info.mengnan.dialogerai.rag.injector.RagSourceStore;
+import info.mengnan.dialogerai.tool.ToolExecutionStore;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
@@ -48,25 +51,16 @@ import static info.mengnan.dialogerai.rag.constant.promptTemplate.PromptTemplate
 
 
 @Slf4j
+@RequiredArgsConstructor
 public class ChatService {
 
     private final ChatMemoryStore chatMemoryStore;
     private final UniversalModelFactory modelFactory;
     private final DynamicEmbeddingStoreRegistry embeddingStoreRegistry;
     private final RagSourceStore ragSourceStore;
+    private final ToolExecutionStore toolExecutionStore;
     private final Executor ragExecutor;
-
-    public ChatService(ChatMemoryStore chatMemoryStore,
-                       UniversalModelFactory modelFactory,
-                       DynamicEmbeddingStoreRegistry embeddingStoreRegistry,
-                       RagSourceStore ragSourceStore,
-                       Executor ragExecutor) {
-        this.chatMemoryStore = chatMemoryStore;
-        this.modelFactory = modelFactory;
-        this.embeddingStoreRegistry = embeddingStoreRegistry;
-        this.ragSourceStore = ragSourceStore;
-        this.ragExecutor = ragExecutor;
-    }
+    private final Executor toolExecutor;
 
     /**
      * 流式RAG对话 - 使用回调处理器
@@ -88,7 +82,7 @@ public class ChatService {
                 .configureStreamingChatModel(configs.get(STREAMING_CHAT))
                 .configureChatModel(configs.get(CHAT))
                 .configureModerationModel(configs.get(MODERATION))
-                .configureTools(assembledModels.getTools(), aiComponents.toolMap())
+                .configureTools(assembledModels.getTools(), aiComponents.toolMap(), sessionId)
                 .chatMemoryProvider(assembledModels)
                 .build();
         try {
@@ -141,12 +135,33 @@ public class ChatService {
             return this;
         }
 
-        private AssistantUniqueBuilder configureTools(boolean hasTools, Map<ToolSpecification, ToolExecutor> toolMap) {
+        private AssistantUniqueBuilder configureTools(boolean hasTools,
+                                                      Map<ToolSpecification, ToolExecutor> toolMap,
+                                                      String sessionId) {
             if (hasTools) {
                 aiServices.tools(toolMap);
+                aiServices.executeToolsConcurrently(toolExecutor);
+                aiServices.beforeToolExecution(before -> {
+                    ToolExecutionRequest request = before.request();
+                    toolExecutionStore.savePending(
+                            sessionId,
+                            new ToolExecutionStore.ToolExecution(request.id(), request.name(), request.arguments(), null)
+                    );
+                });
+                aiServices.afterToolExecution(execution -> {
+                    ToolExecutionRequest request = execution.request();
+                    String result = execution.result() != null ? execution.result() : "";
+                    if (!toolExecutionStore.updateResult(sessionId, request.id(), result)) {
+                        toolExecutionStore.savePending(
+                                sessionId,
+                                new ToolExecutionStore.ToolExecution(request.id(), request.name(), request.arguments(), result)
+                        );
+                    }
+                });
             }
             return this;
         }
+
 
         private AssistantUniqueBuilder configureStreamingChatModel(ModelConfig streamingChatConfig) {
             if (streamingChatConfig == null) {

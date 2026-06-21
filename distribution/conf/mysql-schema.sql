@@ -194,6 +194,27 @@ CREATE TABLE `chat_message_rag_source`
   COLLATE = utf8mb4_0900_ai_ci COMMENT ='RAG检索命中片段表';
 
 -- ----------------------------
+-- Table structure for chat_message_tool_execution
+-- ----------------------------
+DROP TABLE IF EXISTS `chat_message_tool_execution`;
+CREATE TABLE `chat_message_tool_execution`
+(
+    `id`           bigint(20)   NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `message_id`   bigint(20)            DEFAULT NULL COMMENT 'chat_messages.id（ASSISTANT）',
+    `session_id`   varchar(255) NOT NULL COMMENT '会话ID',
+    `tool_call_id` varchar(255)          DEFAULT NULL COMMENT 'LLM 工具调用 ID',
+    `tool_name`    varchar(255) NOT NULL COMMENT '工具名称',
+    `arguments`    text COMMENT '调用参数 JSON',
+    `result`       text COMMENT '执行结果',
+    `created_at`   timestamp    NULL     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_message_id` (`message_id`),
+    KEY `idx_session_id` (`session_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci COMMENT ='工具调用执行记录表';
+
+-- ----------------------------
 -- Table structure for chat_tool_description
 -- ----------------------------
 DROP TABLE IF EXISTS `chat_tool_description`;

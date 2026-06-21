@@ -35,9 +35,7 @@ public class ToolAdapterService {
     public Map<ToolSpecification, ToolExecutor> dynamicTools(Long memberId) {
         log.info("Creating and initializing dynamic tools...");
 
-        Tools tools = new Tools(
-                key -> bizConfigService.getPlainValue(memberId, key)
-        );
+        Tools tools = new Tools(key -> bizConfigService.getPlainValue(memberId, key));
 
         // 从数据库查询所有工具描述
         List<ChatToolDescription> toolEntities = toolDescriptionService.findByMemberId(memberId);

@@ -16,6 +16,7 @@ public class ChatMessageService {
 
     private final ChatMessageRepository chatMessageRepository;
     private final ChatMessageRagSourceRepository chatMessageRagSourceRepository;
+    private final ChatMessageToolExecutionService chatMessageToolExecutionService;
 
     public List<ChatMessage> findBySessionId(String sessionId) {
         return chatMessageRepository.findChat(sessionId);
@@ -33,19 +34,7 @@ public class ChatMessageService {
     public void truncateMessages(String sessionId, Long messageId) {
         chatMessageRepository.deleteByMessageIdGreaterThanOrEqual(sessionId, messageId);
         chatMessageRagSourceRepository.deleteByMessageIdGreaterThanOrEqual(sessionId, messageId);
-    }
-
-    public void deleteBySessionId(String sessionId) {
-        chatMessageRepository.deleteBySessionId(sessionId);
-    }
-
-    public ChatMessage save(ChatMessage chatMessage) {
-        chatMessageRepository.insert(chatMessage);
-        return chatMessage;
-    }
-
-    public List<Long> findRagSourceIds(Long messageId) {
-        return chatMessageRagSourceRepository.findIdsForMessage(messageId);
+        chatMessageToolExecutionService.deleteByMessageIdGreaterThanOrEqual(sessionId, messageId);
     }
 
     public Map<Long, List<Long>> findRagSourceIdMap(String sessionId) {

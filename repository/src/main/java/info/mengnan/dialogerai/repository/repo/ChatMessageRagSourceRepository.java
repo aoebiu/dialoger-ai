@@ -53,4 +53,8 @@ public class ChatMessageRagSourceRepository {
     public void deleteByMessageIdGreaterThanOrEqual(String sessionId, Long messageId) {
         mapper.deleteByMessageIdGreaterThanOrEqual(sessionId, messageId);
     }
+
+    public void deleteBySessionId(String sessionId) {
+        mapper.deleteBySessionId(sessionId);
+    }
 }

@@ -46,6 +46,7 @@ export interface HistoryMessage {
 export interface HistoryResponse {
   messages?: HistoryMessage[]
   ragSourceMap?: Record<string, number[]>
+  toolExecutionMap?: Record<string, number[]>
   title?: string
 }
 
@@ -73,17 +74,6 @@ export async function deleteSession(sessionId: string) {
   return $delete(`/chat/sessions/${sessionId}`)
 }
 
-export interface RagSourcesLatest {
-  sourceIds?: number[]
-}
-
-/**
- * 获取指定会话最新用户消息的 RAG messageId（轻量检查，不含内容）
- */
-export async function getRagSourcesLatest(sessionId: string) {
-  return $get<RagSourcesLatest>(`/chat/ragSources/latest?sessionId=${sessionId}`)
-}
-
 export interface RagSourcesData {
   sources: RagSource[]
 }
@@ -92,7 +82,29 @@ export interface RagSourcesData {
  * 按 rag source id 列表拉取知识库来源内容
  */
 export async function getRagSources(ids: number[]) {
+  if (!ids.length) return { success: true, data: { sources: [] as RagSource[] } }
   return $get<RagSourcesData>(`/chat/ragSources?ids=${ids.join(',')}`)
+}
+
+/** 工具调用记录 */
+export interface ToolExecution {
+  id?: number
+  toolCallId?: string
+  toolName: string
+  arguments?: string
+  result?: string
+}
+
+export interface ToolExecutionsData {
+  executions: ToolExecution[]
+}
+
+/**
+ * 按 tool execution id 列表拉取工具调用详情
+ */
+export async function getToolExecutions(ids: number[]) {
+  if (!ids.length) return { success: true, data: { executions: [] as ToolExecution[] } }
+  return $get<ToolExecutionsData>(`/chat/toolExecutions?ids=${ids.join(',')}`)
 }
 
 /**

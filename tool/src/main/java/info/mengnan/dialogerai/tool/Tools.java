@@ -1,5 +1,6 @@
 package info.mengnan.dialogerai.tool;
 
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.service.tool.ToolExecutor;
@@ -164,73 +165,69 @@ public class Tools {
      * 根据工具描述创建执行器
      */
     private ToolExecutor createExecutor(ToolDescription desc) {
-        return (request, memoryId) -> {
-            Context context = null;
-            try {
-                // 验证执行脚本是否存在
-                if (desc.getExecute() == null || desc.getExecute().trim().isEmpty()) {
-                    log.error("Tool {} has no execute script defined", desc.getName());
-                    return "execution failed: no execute script defined";
-                }
-
-                // 从池中借出 Context
-                context = contextPool.borrow();
-
-                // 解析参数
-                JSONObject jsonObject = JSONUtil.parseObj(request.arguments());
-                log.info("Executing tool: {} with arguments: {}", desc.getName(), request.arguments());
-
-                // 构建包装的 JavaScript 代码，将参数注入到执行环境中
-                String executeScript = desc.getExecute().trim();
-                String wrappedScript;
-                // 检查脚本是否定义了 execute 函数
-                if (executeScript.contains("function execute")) {
-                    wrappedScript = String.format(FUNCTION_EXECUTE_SCRIPT,
-                            JSONUtil.toJsonStr(jsonObject),
-                            executeScript
-                    );
-                } else {
-                    // 否则直接执行脚本并期望返回值
-                    wrappedScript = String.format(DEFAULT_EXECUTE_SCRIPT,
-                            JSONUtil.toJsonStr(jsonObject),
-                            executeScript
-                    );
-                }
-
-                // 创建并执行脚本
-                Source source = Source.newBuilder("js", wrappedScript, desc.getName()).build();
-                Value result = context.eval(source);
-
-                // 处理不同类型的返回值
-                if (result.isNull()) {
-                    return "null";
-                } else if (result.isBoolean()) {
-                    return String.valueOf(result.asBoolean());
-                } else if (result.isNumber()) {
-                    return String.valueOf(result.asDouble());
-                } else if (result.isString()) {
-                    return result.asString();
-                } else if (result.hasArrayElements()) {
-                    // 处理数组返回值
-                    return JSONUtil.parseArray(result).toString();
-                } else if (result.hasMembers()) {
-                    // 处理对象返回值
-                    return JSONUtil.parseObj(result.toString()).toString();
-                } else {
-                    return result.toString();
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.error("Interrupted while waiting for context: {}", desc.getName(), e);
-                return "execution failed: interrupted while waiting for context";
-            } catch (Exception e) {
-                log.error("Failed to execute tool: {}", desc.getName(), e);
-                return "execution failed: " + e.getMessage();
-            } finally {
-                if (context != null) {
-                    contextPool.returnContext(context);
-                }
-            }
-        };
+        return (request, memoryId) -> executeToolScript(desc, request);
     }
+
+    private String executeToolScript(ToolDescription desc, ToolExecutionRequest request) {
+        Context context = null;
+        try {
+            if (desc.getExecute() == null || desc.getExecute().trim().isEmpty()) {
+                log.error("Tool {} has no execute script defined", desc.getName());
+                return "execution failed: no execute script defined";
+            }
+
+            context = contextPool.borrow();
+
+            JSONObject jsonObject = JSONUtil.parseObj(request.arguments());
+            log.info("Executing tool: {} with arguments: {}", desc.getName(), request.arguments());
+
+            String executeScript = desc.getExecute().trim();
+            String wrappedScript;
+            if (executeScript.contains("function execute")) {
+                wrappedScript = String.format(FUNCTION_EXECUTE_SCRIPT,
+                        JSONUtil.toJsonStr(jsonObject),
+                        executeScript
+                );
+            } else {
+                wrappedScript = String.format(DEFAULT_EXECUTE_SCRIPT,
+                        JSONUtil.toJsonStr(jsonObject),
+                        executeScript
+                );
+            }
+
+            Source source = Source.newBuilder("js", wrappedScript, desc.getName()).build();
+            Value result = context.eval(source);
+            return formatResult(result);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Interrupted while waiting for context: {}", desc.getName(), e);
+            return "execution failed: interrupted while waiting for context";
+        } catch (Exception e) {
+            log.error("Failed to execute tool: {}", desc.getName(), e);
+            return "execution failed: " + e.getMessage();
+        } finally {
+            if (context != null) {
+                contextPool.returnContext(context);
+            }
+        }
+    }
+
+    private static String formatResult(Value result) {
+        if (result.isNull()) {
+            return "null";
+        } else if (result.isBoolean()) {
+            return String.valueOf(result.asBoolean());
+        } else if (result.isNumber()) {
+            return String.valueOf(result.asDouble());
+        } else if (result.isString()) {
+            return result.asString();
+        } else if (result.hasArrayElements()) {
+            return JSONUtil.parseArray(result).toString();
+        } else if (result.hasMembers()) {
+            return JSONUtil.parseObj(result.toString()).toString();
+        } else {
+            return result.toString();
+        }
+    }
+
 }

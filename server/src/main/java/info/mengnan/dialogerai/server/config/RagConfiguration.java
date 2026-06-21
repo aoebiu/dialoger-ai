@@ -13,6 +13,7 @@ import info.mengnan.dialogerai.rag.service.PromptTemplateManager;
 import info.mengnan.dialogerai.rag.injector.RagSourceStore;
 import info.mengnan.dialogerai.rag.service.DirectModelInvoker;
 import info.mengnan.dialogerai.server.service.ModelConfigService;
+import info.mengnan.dialogerai.tool.ToolExecutionStore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -67,13 +68,17 @@ public class RagConfiguration {
                                    UniversalModelFactory modelFactory,
                                    DynamicEmbeddingStoreRegistry embeddingStoreRegistry,
                                    RagSourceStore ragSourceStore,
-                                   @Qualifier("ragExecutor") Executor ragExecutor) {
+                                   ToolExecutionStore toolExecutionStore,
+                                   @Qualifier("ragExecutor") Executor ragExecutor,
+                                   @Qualifier("toolExecutor") Executor toolExecutor) {
         log.info("Creating ChatService...");
         return new ChatService(chatMemoryStore,
                 modelFactory,
                 embeddingStoreRegistry,
                 ragSourceStore,
-                ragExecutor);
+                toolExecutionStore,
+                ragExecutor,
+                toolExecutor);
     }
 
     /**
