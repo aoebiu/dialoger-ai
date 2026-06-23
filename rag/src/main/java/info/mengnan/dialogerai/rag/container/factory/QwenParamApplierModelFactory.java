@@ -17,10 +17,10 @@ public class QwenParamApplierModelFactory extends QwenParamApplier
     @Override
     public Object createModel(ModelConfig config, ModelType modelType) {
         return switch (modelType) {
-            case CHAT           -> buildChatModel(config).build();
-            case STREAMING_CHAT -> buildStreamingChatModel(config).build();
+            case CHAT           -> createChatModel(config);
+            case STREAMING_CHAT -> createStreamingChatModel(config);
             case EMBEDDING      -> createEmbeddingModel(config);
-            case IMAGE          -> buildImageModel(config).build();
+            case IMAGE          -> createImageModel(config);
             default -> throw new UnsupportedOperationException(notSupported(modelType));
         };
     }

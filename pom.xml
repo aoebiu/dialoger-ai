@@ -136,6 +136,12 @@
                 <version>${langchain4j.other.version}</version>
             </dependency>
 
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-hugging-face</artifactId>
+                <version>${langchain4j.other.version}</version>
+            </dependency>
+
             <!-- LangChain4j Elasticsearch -->
             <dependency>
                 <groupId>dev.langchain4j</groupId>

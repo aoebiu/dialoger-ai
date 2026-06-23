@@ -68,6 +68,12 @@
             <artifactId>langchain4j-cohere</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-hugging-face</artifactId>
+        </dependency>
+
+
         <!-- LangChain4j Elasticsearch -->
         <dependency>
             <groupId>dev.langchain4j</groupId>

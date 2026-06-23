@@ -1,15 +1,15 @@
 package info.mengnan.dialogerai.rag.container.factory;
 
-import dev.langchain4j.model.openai.*;
+import dev.langchain4j.model.chat.StreamingChatModel;
+import dev.langchain4j.model.huggingface.HuggingFaceEmbeddingModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import info.mengnan.dialogerai.common.param.ModelType;
 import info.mengnan.dialogerai.rag.config.ModelConfig;
-import info.mengnan.dialogerai.rag.container.factory.applier.OpenAiParamApplier;
+import info.mengnan.dialogerai.rag.container.factory.applier.HuggingFaceApplier;
 
-/**
- * OpenAI 模型工厂。
- */
-public class OpenAiParamApplierModelFactory extends OpenAiParamApplier
-        implements ChatModelFactory, EmbeddingModelFactory, ImageModelFactory, ModerationModelFactory {
+public class HuggingFaceApplierModelFactory extends HuggingFaceApplier
+        implements ChatModelFactory, EmbeddingModelFactory {
 
     @Override
     public Object createModel(ModelConfig config, ModelType modelType) {
@@ -17,15 +17,8 @@ public class OpenAiParamApplierModelFactory extends OpenAiParamApplier
             case CHAT           -> createChatModel(config);
             case STREAMING_CHAT -> createStreamingChatModel(config);
             case EMBEDDING      -> createEmbeddingModel(config);
-            case MODERATION     -> createModerationModel(config);
-            case IMAGE          -> createImageModel(config);
             default -> throw new UnsupportedOperationException(notSupported(modelType));
         };
-    }
-
-    @Override
-    public OpenAiModerationModel createModerationModel(ModelConfig config) {
-        return buildModerationModel(config).build();
     }
 
     @Override
@@ -39,12 +32,7 @@ public class OpenAiParamApplierModelFactory extends OpenAiParamApplier
     }
 
     @Override
-    public OpenAiEmbeddingModel createEmbeddingModel(ModelConfig modelConfig) {
+    public HuggingFaceEmbeddingModel createEmbeddingModel(ModelConfig modelConfig) {
         return buildEmbeddingModel(modelConfig).build();
-    }
-
-    @Override
-    public OpenAiImageModel createImageModel(ModelConfig modelConfig) {
-        return buildImageModel(modelConfig).build();
     }
 }
