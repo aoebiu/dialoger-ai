@@ -759,11 +759,6 @@ function send() {
   if (!text || !sessionId || streaming.value) return
 
   conv.appendMessage(sessionId, { role: 'user', content: text })
-  const isFirstUserMessage =
-    conv.currentMessages.filter((m) => m.role === 'user').length === 1
-  if (isFirstUserMessage) {
-    conv.updateTitle(sessionId, text.slice(0, 24) + (text.length > 24 ? '…' : ''))
-  }
 
   inputText.value = ''
   conv.appendMessage(sessionId, { role: 'assistant', content: '' })
