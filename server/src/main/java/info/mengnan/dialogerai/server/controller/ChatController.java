@@ -79,18 +79,8 @@ public class ChatController {
         ChatConversations chatConversations = new ChatConversations(memberId,sessionId);
 
         ChatSession chatSession = chatSessionService.findBySessionId(sessionId);
-        if (chatSession != null && DEFAULT_TITLE.equals(chatSession.getTitle())) {
-            List<String> list = chatMessageService.findChat(sessionId, List.of(ASSISTANT.n(), USER.n())).stream()
-                    .map(ChatMessage::getContent)
-                    .limit(3)
-                    .toList();
-            if (list.size() >= 2) {
-                Map<String, Object> params = Map.of("query", list);
-                String title = directModelInvoker.directInvoke("conversations.titleGeneration",
-                        "title_generation", params);
-                chatConversations.setTitle(title);
-                chatSessionService.updateChatTitle(sessionId, title);
-            }
+        if (chatSession != null && !DEFAULT_TITLE.equals(chatSession.getTitle())) {
+            chatConversations.setTitle(chatSession.getTitle());
         }
         ChatMessage latest = chatMessageService.findLatest(sessionId, ASSISTANT.n());
         if (latest != null) {

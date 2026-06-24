@@ -5,20 +5,15 @@ import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.rag.content.Content;
-import dev.langchain4j.rag.content.injector.ContentInjector;
-import dev.langchain4j.rag.content.injector.DefaultContentInjector;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import info.mengnan.dialogerai.rag.service.DirectModelInvoker;
 import info.mengnan.dialogerai.repository.entity.ChatMessage;
 import info.mengnan.dialogerai.repository.entity.ChatMessageExtras;
-import info.mengnan.dialogerai.repository.entity.ChatMessageRagSource;
-import info.mengnan.dialogerai.repository.repo.ChatMessageRagSourceRepository;
+import info.mengnan.dialogerai.repository.entity.ChatSession;
 import info.mengnan.dialogerai.repository.repo.ChatMessageRepository;
 import info.mengnan.dialogerai.rag.injector.RagSourceStore;
+import info.mengnan.dialogerai.server.service.ChatSessionService;
 import info.mengnan.dialogerai.tool.ToolExecutionStore;
-import info.mengnan.dialogerai.server.core.ChatHistoryCompressing;
-import info.mengnan.dialogerai.server.core.TokenCounting;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -28,16 +23,17 @@ import java.util.List;
 import java.util.Map;
 import static info.mengnan.dialogerai.common.param.MessageRole.*;
 import static info.mengnan.dialogerai.rag.config.DefaultModelConfig.DEFAULT_SESSION;
+import static info.mengnan.dialogerai.server.param.chat.ChatSessionResponse.DEFAULT_TITLE;
 
 @Component
 @RequiredArgsConstructor
 public class PersistentChatMemoryStore implements ChatMemoryStore {
 
     private final ChatMessageRepository chatMessageService;
-    private final ChatHistoryCompressing compressing;
-    private final TokenCounting tokenCounting;
     private final RagSourceStore ragSourceStore;
     private final ToolExecutionStore toolExecutionStore;
+    private final ChatSessionService chatSessionService;
+    private final DirectModelInvoker directModelInvoker;
 
     @Override
     public List<dev.langchain4j.data.message.ChatMessage> getMessages(Object memoryId) {
@@ -116,20 +112,30 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
             chatMessageService.insert(dbMessage);
         }
 
-        List<ChatMessage> chats = chatMessageService.findChat(sessionId, List.of(USER.n(), ASSISTANT.n(), COMPRESS.n(), TOOL.n()));
-        if (messages.size() > 1) {
-            int summary = 0;
-            for (ChatMessage chat : chats) {
-                summary += tokenCounting.estimateTokenCount(chat.getContent());
-            }
-            if (summary > 1500) {
-                String compressRes = compressing.compressHistory(chats);
-                // saveCompressedSummary(sessionId, compressRes, chats);
-            }
+        ChatSession chatSession = chatSessionService.findBySessionId(sessionId);
+        if (DEFAULT_TITLE.equals(chatSession.getTitle())) {
+            titleGeneration(messages, chatSession.getChatSessionId());
         }
     }
 
-    private static ChatMessageExtras buildUserExtras(UserMessage msg) {
+    private void titleGeneration(List<dev.langchain4j.data.message.ChatMessage> messages, String sessionId) {
+        List<String> textList = new ArrayList<>();
+        for (dev.langchain4j.data.message.ChatMessage msg : messages) {
+            if (msg instanceof UserMessage m) {
+                textList.add(m.singleText());
+            } else if (msg instanceof AiMessage m && m.text() != null) {
+                textList.add(m.text());
+            }
+        }
+        if (textList.size() < 2) return;
+
+        Map<String, Object> params = Map.of("query", textList);
+        String title = directModelInvoker.directInvoke("conversations.titleGeneration",
+                "title_generation", params);
+        chatSessionService.updateChatTitle(sessionId, title);
+    }
+
+    private ChatMessageExtras buildUserExtras(UserMessage msg) {
         boolean hasName = msg.name() != null && !msg.name().isBlank();
         if (!hasName) return null;
         ChatMessageExtras ex = new ChatMessageExtras();
@@ -137,7 +143,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         return ex;
     }
 
-    private static ChatMessageExtras buildAiExtras(AiMessage msg) {
+    private ChatMessageExtras buildAiExtras(AiMessage msg) {
         Map<String, Object> attrs = msg.attributes();
         boolean hasAttrs = attrs != null && !attrs.isEmpty();
         boolean hasThinking = msg.thinking() != null && !msg.thinking().isBlank();
@@ -164,7 +170,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         return ex;
     }
 
-    private static ChatMessageExtras buildToolExtras(ToolExecutionResultMessage msg) {
+    private ChatMessageExtras buildToolExtras(ToolExecutionResultMessage msg) {
         boolean hasId = msg.id() != null && !msg.id().isBlank();
         boolean hasName = msg.toolName() != null && !msg.toolName().isBlank();
         if (!hasId && !hasName) {
