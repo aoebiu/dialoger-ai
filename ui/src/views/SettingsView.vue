@@ -380,11 +380,18 @@
           <div class="section-header-bar">
             <div class="section-header-info">
               <h1 class="page-title">账号管理</h1>
-              <p class="page-desc">管理系统用户，可以添加或删除账号。</p>
+              <p class="page-desc">
+                <template v-if="auth.isOwner">
+                  查看团队账号结构，管理您的 Member 成员。
+                </template>
+                <template v-else>
+                  查看当前团队信息，Member 共享 Owner 的模型配置与资源。
+                </template>
+              </p>
             </div>
-            <div class="section-header-actions">
-              <button type="button" class="primary-action-btn" @click="showAddAccountModal = true">
-                + 添加账号
+            <div v-if="auth.isOwner" class="section-header-actions">
+              <button type="button" class="primary-action-btn" @click="openAddAccountModal">
+                + 添加成员
               </button>
             </div>
           </div>
@@ -396,7 +403,7 @@
                   type="button"
                   class="refresh-btn"
                   :disabled="loadingMemberList"
-                  @click="loadMemberList"
+                  @click="loadTeamOverview"
                 >
                   {{ loadingMemberList ? '刷新中…' : '刷新' }}
                 </button>
@@ -406,53 +413,86 @@
                 <div class="data-table-loading-backdrop" />
                 <div class="data-table-loading-content">
                   <span class="data-table-spinner" />
-                  <span class="data-table-loading-text">加载账号列表…</span>
+                  <span class="data-table-loading-text">加载团队账号…</span>
                 </div>
               </div>
-              <div v-else-if="accountList.length > 0" class="table-scroll-x">
+              <div v-else-if="displayAccountRows.length > 0" class="table-scroll-x">
                 <div class="account-list accounts-list">
                 <div class="list-header">
                   <span>用户名</span>
+                  <span>身份</span>
                   <span>昵称</span>
                   <span>手机号</span>
                   <span>状态</span>
+                  <span>创建时间</span>
                   <span>操作</span>
                 </div>
                 <div
-                  v-for="account in accountList"
+                  v-for="account in displayAccountRows"
                   :key="account.id"
                   class="account-item"
+                  :class="{ 'is-current-user': account.id === teamOverview?.currentUserId }"
                 >
                   <div class="account-info">
-                    <span class="account-username">{{ account.username }}</span>
+                    <span class="account-username">
+                      {{ account.username }}
+                      <span v-if="account.id === teamOverview?.currentUserId" class="current-user-inline">当前</span>
+                    </span>
+                    <span class="role-badge" :class="roleBadgeClass(account.role)">{{ roleLabel(account.role) }}</span>
                     <span class="account-nickname">{{ account.nickname || '-' }}</span>
                     <span class="account-phone">{{ account.phone || '-' }}</span>
-                    <span class="account-status" :class="statusClass(account.status)">
-                      {{ statusTextForAccount(account.status) }}
+                    <span class="account-status" :class="statusBadgeClass(account.status)">
+                      {{ statusLabel(account.status) }}
                     </span>
+                    <span class="account-created">{{ formatDate(account.createdAt ?? null) }}</span>
                   </div>
-                  <button
-                    v-if="account.id !== auth.user?.id"
-                    type="button"
-                    class="delete-btn"
-                    @click="confirmDelete(account)"
-                  >
-                    删除
-                  </button>
-                  <span v-else class="current-user-tag">当前账号</span>
+                  <div class="upload-actions">
+                    <template v-if="account.role === MEMBER_ROLE.OWNER">
+                      <span class="current-user-tag">—</span>
+                    </template>
+                    <template v-else-if="auth.isOwner">
+                      <button type="button" class="edit-btn" @click="openEditAccountModal(account)">编辑</button>
+                      <button
+                        v-if="account.status === MEMBER_STATUS.ENABLED"
+                        type="button"
+                        class="delete-btn"
+                        @click="confirmDisableAccount(account)"
+                      >
+                        禁用
+                      </button>
+                      <button
+                        v-else
+                        type="button"
+                        class="edit-btn"
+                        @click="enableAccount(account)"
+                      >
+                        启用
+                      </button>
+                      <button
+                        type="button"
+                        class="delete-btn"
+                        @click="confirmDelete(account)"
+                      >
+                        删除
+                      </button>
+                    </template>
+                    <template v-else>
+                      <span class="current-user-tag">只读</span>
+                    </template>
+                  </div>
                 </div>
                 </div>
               </div>
-              <p v-else class="table-empty">暂无账号</p>
+              <p v-else class="table-empty">暂无团队账号信息</p>
             </div>
           </div>
         </div>
 
-          <!-- 添加账号弹窗 -->
+          <!-- 添加成员弹窗 -->
           <div v-if="showAddAccountModal" class="modal-overlay">
             <div class="modal-content">
               <div class="modal-header">
-                <h2 class="modal-title">添加账号</h2>
+                <h2 class="modal-title">添加成员</h2>
                 <button type="button" class="modal-close" @click="closeAddAccountModal">×</button>
               </div>
               <div class="modal-body">
@@ -502,6 +542,70 @@
               </div>
             </div>
           </div>
+
+          <!-- 编辑成员弹窗 -->
+          <div v-if="showEditAccountModal" class="modal-overlay">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h2 class="modal-title">编辑成员</h2>
+                <button type="button" class="modal-close" @click="closeEditAccountModal">×</button>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  <label class="form-label">用户名</label>
+                  <input
+                    :value="editingAccount?.username"
+                    type="text"
+                    class="form-input"
+                    disabled
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">昵称</label>
+                  <input
+                    v-model="editAccountForm.nickname"
+                    type="text"
+                    class="form-input"
+                    placeholder="请输入昵称"
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">手机号</label>
+                  <input
+                    v-model="editAccountForm.phone"
+                    type="tel"
+                    class="form-input"
+                    placeholder="请输入手机号"
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">状态</label>
+                  <select v-model.number="editAccountForm.status" class="form-input">
+                    <option :value="MEMBER_STATUS.ENABLED">正常</option>
+                    <option :value="MEMBER_STATUS.DISABLED">禁用</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">新密码</label>
+                  <input
+                    v-model="editAccountForm.password"
+                    type="password"
+                    class="form-input"
+                    placeholder="留空则不修改"
+                    autocomplete="new-password"
+                  />
+                </div>
+                <p v-if="editAccountError" class="form-error">{{ editAccountError }}</p>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn-cancel" @click="closeEditAccountModal">取消</button>
+                <button type="button" class="btn-confirm" :disabled="editingAccountSaving" @click="submitEditAccount">
+                  {{ editingAccountSaving ? '保存中...' : '保存' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
         </template>
 
         <!-- 模型配置 -->
@@ -737,13 +841,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { MEMBER_ROLE, MEMBER_STATUS, deleteMember } from '@/api/auth'
 import type { KnowledgeBaseItem } from '@/api/knowledgeBase'
 import { getKnowledgeBaseList, deleteKnowledgeBase } from '@/api/knowledgeBase'
-import { getMemberList, createMember, deleteMember } from '@/api/auth'
-import type { MemberInfo } from '@/api/auth'
+import {
+  getTeamOverview,
+  createTeamMember,
+  updateTeamMember,
+  disableTeamMember,
+  roleBadgeClass,
+  roleLabel,
+  statusBadgeClass,
+  statusLabel,
+} from '@/api/team'
+import type { TeamMember, TeamOverview } from '@/api/team'
 import { getApiKeyList, createApiKey, disableApiKey, deleteApiKey } from '@/api/apikey'
 import type { ApiKeyListItem, CreateApiKeyResult } from '@/api/apikey'
 import { getModelKeyList, createModelKey, deleteModelKey } from '@/api/model'
@@ -797,15 +911,38 @@ const bizConfigForm = ref({
 const bizConfigPairs = ref<BizConfigPairRow[]>([{ key: '', value: '' }])
 
 // 账号管理相关
-const accountList = ref<MemberInfo[]>([])
+const teamOverview = ref<TeamOverview | null>(null)
 const showAddAccountModal = ref(false)
+const showEditAccountModal = ref(false)
 const addingAccount = ref(false)
+const editingAccountSaving = ref(false)
 const addAccountError = ref('')
+const editAccountError = ref('')
+const editingAccount = ref<TeamMember | null>(null)
 const addAccountForm = ref({
   username: '',
   password: '',
   nickname: '',
   phone: '',
+})
+const editAccountForm = ref({
+  nickname: '',
+  phone: '',
+  status: MEMBER_STATUS.ENABLED,
+  password: '',
+})
+
+const displayAccountRows = computed(() => {
+  if (!teamOverview.value) return []
+  const owner = {
+    ...teamOverview.value.owner,
+    role: teamOverview.value.owner.role ?? MEMBER_ROLE.OWNER,
+  }
+  const members = teamOverview.value.members.map((member) => ({
+    ...member,
+    role: member.role ?? MEMBER_ROLE.MEMBER,
+  }))
+  return [owner, ...members]
 })
 
 // API Key 管理
@@ -895,20 +1032,11 @@ async function deleteKnowledgeBaseById(id: number) {
   }
 }
 
-function statusTextForAccount(status: number | undefined): string {
-  if (status === 1) return '正常'
-  if (status === 0) return '禁用'
-  return status?.toString() ?? '未知'
-}
-
-function statusClass(status: number | undefined): string {
-  if (status === 1) return 'status-normal'
-  if (status === 0) return 'status-disabled'
-  return ''
-}
-
-
 // 账号管理相关方法
+function openAddAccountModal() {
+  showAddAccountModal.value = true
+}
+
 function closeAddAccountModal() {
   showAddAccountModal.value = false
   addAccountForm.value = {
@@ -920,14 +1048,70 @@ function closeAddAccountModal() {
   addAccountError.value = ''
 }
 
-function confirmDelete(account: MemberInfo) {
-  showConfirm(`确定要删除账号 "${account.username}" 吗？`, () => deleteMemberById(account.id))
+function openEditAccountModal(account: TeamMember) {
+  editingAccount.value = account
+  editAccountForm.value = {
+    nickname: account.nickname || '',
+    phone: account.phone || '',
+    status: account.status ?? MEMBER_STATUS.ENABLED,
+    password: '',
+  }
+  editAccountError.value = ''
+  showEditAccountModal.value = true
+}
+
+function closeEditAccountModal() {
+  showEditAccountModal.value = false
+  editingAccount.value = null
+  editAccountError.value = ''
+  editAccountForm.value.password = ''
+}
+
+function confirmDelete(account: TeamMember) {
+  showConfirm(`确定要删除成员 "${account.username}" 吗？`, () => deleteMemberById(account.id))
+}
+
+function confirmDisableAccount(account: TeamMember) {
+  showConfirm(`确定要禁用成员 "${account.username}" 吗？`, () => disableAccountById(account.id))
+}
+
+async function disableAccountById(id: number) {
+  try {
+    const res = await disableTeamMember(id)
+    if (res.success) {
+      toastSuccess('已禁用')
+      loadTeamOverview()
+    } else {
+      toastError(res.message || '禁用失败')
+    }
+  } catch (e: any) {
+    toastError(e.message || '禁用失败')
+  }
+}
+
+async function enableAccount(account: TeamMember) {
+  try {
+    const res = await updateTeamMember(account.id, { status: MEMBER_STATUS.ENABLED })
+    if (res.success) {
+      toastSuccess('已启用')
+      loadTeamOverview()
+    } else {
+      toastError(res.message || '启用失败')
+    }
+  } catch (e: any) {
+    toastError(e.message || '启用失败')
+  }
 }
 
 async function deleteMemberById(id: number) {
   try {
-    await deleteMember(id)
-    accountList.value = accountList.value.filter((a) => a.id !== id)
+    const res = await deleteMember(id)
+    if (res.success) {
+      toastSuccess('已删除')
+      loadTeamOverview()
+    } else {
+      toastError(res.message || '删除失败')
+    }
   } catch (e: any) {
     toastError(e.message || '删除失败')
   }
@@ -943,9 +1127,14 @@ async function submitAddAccount() {
 
   addingAccount.value = true
   try {
-    await createMember(addAccountForm.value)
+    const res = await createTeamMember(addAccountForm.value)
+    if (!res.success) {
+      addAccountError.value = res.message || '添加失败'
+      return
+    }
     closeAddAccountModal()
-    loadMemberList()
+    toastSuccess('成员添加成功')
+    loadTeamOverview()
   } catch (e: any) {
     addAccountError.value = e.message || '添加失败'
   } finally {
@@ -953,15 +1142,40 @@ async function submitAddAccount() {
   }
 }
 
-async function loadMemberList() {
+async function submitEditAccount() {
+  if (!editingAccount.value) return
+  editAccountError.value = ''
+  editingAccountSaving.value = true
+  try {
+    const res = await updateTeamMember(editingAccount.value.id, {
+      nickname: editAccountForm.value.nickname || undefined,
+      phone: editAccountForm.value.phone || undefined,
+      status: editAccountForm.value.status,
+      password: editAccountForm.value.password || undefined,
+    })
+    if (!res.success) {
+      editAccountError.value = res.message || '保存失败'
+      return
+    }
+    closeEditAccountModal()
+    toastSuccess('保存成功')
+    loadTeamOverview()
+  } catch (e: any) {
+    editAccountError.value = e.message || '保存失败'
+  } finally {
+    editingAccountSaving.value = false
+  }
+}
+
+async function loadTeamOverview() {
   loadingMemberList.value = true
   try {
-    const res = await getMemberList()
+    const res = await getTeamOverview()
     if (res.success && res.data) {
-      accountList.value = res.data
+      teamOverview.value = res.data
     }
-  } catch {
-    // 忽略错误
+  } catch (e: any) {
+    toastError(e.message || '加载团队账号失败')
   } finally {
     loadingMemberList.value = false
   }
@@ -1412,7 +1626,7 @@ function loadSectionData(section: string) {
     case 'bizConfig': loadBizConfigList(); break
     case 'modelConfig': loadModelKeyList(); break
     case 'functionCall': loadFunctionCallList(); break
-    case 'accounts': loadMemberList(); break
+    case 'accounts': loadTeamOverview(); break
   }
 }
 
@@ -2324,7 +2538,7 @@ onMounted(() => {
 .accounts-list .list-header,
 .accounts-list .account-item {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 80px 80px;
+  grid-template-columns: 1fr 72px 1fr 1fr 80px 140px 160px;
   align-items: center;
   gap: 1rem;
   padding-left: 1.25rem;
@@ -2332,16 +2546,60 @@ onMounted(() => {
 }
 
 .accounts-list {
-  min-width: 520px;
+  min-width: 820px;
 }
 
 .accounts-list .list-header span:last-child {
   text-align: center;
 }
 
-.accounts-list .account-item .delete-btn,
-.accounts-list .account-item .current-user-tag {
+.accounts-list .account-item .upload-actions {
   justify-self: center;
+}
+
+.accounts-list .account-item.is-current-user {
+  background: rgba(13, 110, 253, 0.05);
+}
+
+.account-created {
+  color: var(--color-text-tertiary);
+  font-size: 0.8125rem;
+}
+
+.current-user-inline {
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #0d6efd;
+  background: rgba(13, 110, 253, 0.12);
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  justify-self: start;
+}
+
+.role-badge.role-owner {
+  color: #0d6efd;
+  background: rgba(13, 110, 253, 0.12);
+}
+
+.role-badge.role-member {
+  color: #6f42c1;
+  background: rgba(111, 66, 193, 0.12);
+}
+
+.role-badge.role-unknown {
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-input);
 }
 
 /* 模型配置 - grid 布局 */

@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => ({
     mode === 'development' && vueDevTools(),
   ],
   server: {
+    host: true,
     proxy: {
       '/api': {
         target: 'http://localhost:7900',

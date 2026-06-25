@@ -16,6 +16,7 @@ CREATE TABLE `chat_member`
     `phone`      varchar(20)       DEFAULT NULL COMMENT '手机号',
     `avatar`     varchar(500)      DEFAULT NULL COMMENT '头像URL',
     `status`     int(11)           DEFAULT '1' COMMENT '状态: 1-正常, 0-禁用',
+    `role`       tinyint      NOT NULL DEFAULT '1' COMMENT '角色: 1-Owner, 2-Member',
     `created_at` timestamp    NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` timestamp    NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     `deleted`    tinyint(1)        DEFAULT '0' COMMENT '逻辑删除',
@@ -23,6 +24,25 @@ CREATE TABLE `chat_member`
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci COMMENT ='会员表';
+
+-- ----------------------------
+-- Table structure for chat_member_relation
+-- ----------------------------
+DROP TABLE IF EXISTS `chat_member_relation`;
+CREATE TABLE `chat_member_relation`
+(
+    `id`         bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `owner_id`   bigint(20) NOT NULL COMMENT '上级 Owner 的 member_id',
+    `member_id`  bigint(20) NOT NULL COMMENT '下级 Member 的 member_id',
+    `status`     int(11)           DEFAULT '1' COMMENT '状态: 1-正常, 0-禁用',
+    `created_at` timestamp  NULL     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` timestamp  NULL     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_member_id` (`member_id`),
+    KEY `idx_owner_id` (`owner_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci COMMENT ='会员上下级关系表';
 
 -- ----------------------------
 -- Table structure for chat_api_key

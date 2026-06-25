@@ -1,19 +1,25 @@
-package info.mengnan.dialogerai.server.param.auth;
+package info.mengnan.dialogerai.server.param.team;
 
 import info.mengnan.dialogerai.repository.enums.MemberRole;
 import info.mengnan.dialogerai.repository.enums.MemberStatus;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 @Data
-public class MemberResponse {
+public class TeamMemberResponse {
+
     private Long id;
+
     private String username;
+
     private String nickname;
-    private String email;
+
     private String phone;
-    private String avatar;
+
     private MemberStatus status;
+
     private MemberRole role;
-    private Long ownerId;
-    private String token;
+
+    private LocalDateTime createdAt;
 }

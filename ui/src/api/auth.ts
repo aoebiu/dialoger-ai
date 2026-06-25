@@ -1,5 +1,15 @@
 import { $get, $post } from './request'
 
+export const MEMBER_ROLE = {
+  OWNER: 1,
+  MEMBER: 2,
+} as const
+
+export const MEMBER_STATUS = {
+  DISABLED: 0,
+  ENABLED: 1,
+} as const
+
 export interface LoginRequest {
   username: string
   password: string
@@ -13,7 +23,9 @@ export interface MemberInfo {
   phone?: string
   avatar?: string
   status?: number
-  token: string
+  role?: number
+  ownerId?: number | null
+  token?: string
 }
 
 export interface RegisterRequest {
@@ -35,11 +47,7 @@ export async function getMemberInfo() {
   return $get<MemberInfo>('/member/info')
 }
 
-export async function getMemberList() {
-  return $get<MemberInfo[]>('/member/list')
-}
-
-export async function createMember(body: RegisterRequest) {
+export async function register(body: RegisterRequest) {
   return $post('/member/register', body)
 }
 

@@ -6,7 +6,12 @@ import info.mengnan.dialogerai.repository.mapper.MemberMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Repository
 @RequiredArgsConstructor
@@ -14,11 +19,24 @@ public class MemberRepository {
 
     private final MemberMapper mapper;
 
-    public ChatMember findById(Long id) {
+    public ChatMember find(Long id) {
         return mapper.selectById(id);
     }
 
-    public ChatMember findByUsername(String username) {
+
+    public List<ChatMember> list(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, ChatMember> memberMap = mapper.selectBatchIds(ids).stream()
+                .collect(Collectors.toMap(ChatMember::getId, Function.identity()));
+        return ids.stream()
+                .map(memberMap::get)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    public ChatMember find(String username) {
         return mapper.selectOne(new LambdaQueryWrapper<ChatMember>()
                 .eq(ChatMember::getUsername, username));
     }
@@ -32,15 +50,15 @@ public class MemberRepository {
         mapper.insert(entity);
     }
 
-    public void updateById(ChatMember entity) {
+    public void update(ChatMember entity) {
         mapper.updateById(entity);
     }
 
-    public void deleteById(Long id) {
+    public void delete(Long id) {
         mapper.deleteById(id);
     }
 
-    public List<ChatMember> findAll() {
+    public List<ChatMember> listAll() {
         return mapper.selectList(new LambdaQueryWrapper<ChatMember>()
                 .orderByDesc(ChatMember::getId));
     }

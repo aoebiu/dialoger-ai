@@ -130,7 +130,6 @@ public class ChatService {
             DefaultRetrievalAugmentor.DefaultRetrievalAugmentorBuilder ragBuilder = DefaultRetrievalAugmentor.builder();
             ragBuilder.executor(ragExecutor);
 
-
             if (assembledModels.getContentAggregator()) {
                 ragBuilder.contentAggregator(createContentAggregator(assembledModels.getConfigs().get(SCORING)));
             }

@@ -28,7 +28,10 @@
         </div>
       </nav>
       <div class="sidebar-footer">
-        <span class="user">{{ auth.user?.nickname || auth.user?.username }}</span>
+        <div class="user-row">
+          <span class="user">{{ auth.user?.nickname || auth.user?.username }}</span>
+          <span class="role-badge" :class="roleBadgeClass(auth.user?.role)">{{ roleLabel(auth.user?.role) }}</span>
+        </div>
         <button type="button" class="logout-btn" @click="handleLogout">退出登录</button>
       </div>
     </aside>
@@ -40,11 +43,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { logout } from '@/api/auth'
+import { roleBadgeClass, roleLabel } from '@/api/team'
 
 const route = useRoute()
 const router = useRouter()
@@ -54,6 +58,7 @@ const theme = useThemeStore()
 interface MenuItem {
   id: string
   label: string
+  ownerOnly?: boolean
 }
 
 interface MenuGroup {
@@ -61,7 +66,7 @@ interface MenuGroup {
   items: MenuItem[]
 }
 
-const menuGroups: MenuGroup[] = [
+const allMenuGroups: MenuGroup[] = [
   {
     title: '知识库',
     items: [
@@ -80,7 +85,14 @@ const menuGroups: MenuGroup[] = [
   },
 ]
 
-const menuItems = menuGroups.flatMap((group) => group.items)
+const menuGroups = computed(() =>
+  allMenuGroups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !item.ownerOnly || auth.isOwner),
+  })),
+)
+
+const menuItems = computed(() => menuGroups.value.flatMap((group) => group.items))
 
 const themeTooltip = computed(() =>
   theme.resolvedTheme === 'dark' ? '切换到浅色模式' : '切换到深色模式',
@@ -101,10 +113,19 @@ const activeSection = computed(() => {
     return 'documents'
   }
   const section = route.query.section as string | undefined
-  if (section && menuItems.some((item) => item.id === section)) {
+  if (section && menuItems.value.some((item) => item.id === section)) {
     return section
   }
   return 'documents'
+})
+
+onMounted(async () => {
+  if (!auth.isLoggedIn) return
+  try {
+    await auth.refreshUserInfo()
+  } catch {
+    // ignore
+  }
 })
 
 function navigateSection(id: string) {
@@ -243,13 +264,47 @@ async function handleLogout() {
   border-top: 1px solid var(--color-border);
 }
 
+.sidebar-footer .user-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
 .sidebar-footer .user {
   font-size: 0.8125rem;
   color: var(--color-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.role-badge.role-owner {
+  color: #0d6efd;
+  background: rgba(13, 110, 253, 0.12);
+}
+
+.role-badge.role-member {
+  color: #6f42c1;
+  background: rgba(111, 66, 193, 0.12);
+}
+
+.role-badge.role-unknown {
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-input);
 }
 
 .sidebar-footer .logout-btn {
