@@ -18,6 +18,7 @@ public enum ErrorCode {
     // 知识库
     KB_NOT_FOUND("2001", "知识库不存在"),
     KB_NAME_EMPTY("2002", "知识库名称不能为空"),
+    KB_WRITE_DENIED("2003", "无权操作该知识库"),
 
     // 文档
     DOC_DUPLICATE("3001", "该知识库中已存在同名文档"),

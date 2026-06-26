@@ -5,9 +5,12 @@ import info.mengnan.dialogerai.server.param.ErrorCode;
 import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.server.param.knowledgebase.KnowledgeBaseRequest;
 import info.mengnan.dialogerai.server.service.KnowledgeBaseService;
+import info.mengnan.dialogerai.server.service.MemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 public class KnowledgeBaseController {
 
     private final KnowledgeBaseService knowledgeBaseService;
+    private final MemberService memberService;
 
     @PostMapping
     public R create(@RequestBody KnowledgeBaseRequest request) {
@@ -45,13 +49,17 @@ public class KnowledgeBaseController {
     @GetMapping("/list")
     public R list() {
         Long memberId = StpUtil.getLoginIdAsLong();
-        return R.ok(knowledgeBaseService.list(memberId));
+        boolean isOwner = memberService.isOwner(memberId);
+        List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
+        return R.ok(knowledgeBaseService.list(memberId, isOwner, teamMemberIds));
     }
 
     @GetMapping("/{kbId}")
     public R get(@PathVariable("kbId") Long kbId) {
         Long memberId = StpUtil.getLoginIdAsLong();
-        return R.ok(knowledgeBaseService.getKnowledgeBase(kbId, memberId));
+        boolean isOwner = memberService.isOwner(memberId);
+        List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
+        return R.ok(knowledgeBaseService.getKnowledgeBase(kbId, memberId, isOwner, teamMemberIds));
     }
 
     @DeleteMapping("/{kbId}")

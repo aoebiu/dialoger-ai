@@ -6,7 +6,6 @@ import info.mengnan.dialogerai.repository.enums.DocumentStatus;
 import info.mengnan.dialogerai.repository.entity.DocumentInfo;
 import info.mengnan.dialogerai.repository.entity.KnowledgeBase;
 import info.mengnan.dialogerai.repository.repo.DocumentInfoRepository;
-import info.mengnan.dialogerai.repository.repo.KnowledgeBaseRepository;
 import info.mengnan.dialogerai.server.exception.BusinessException;
 import info.mengnan.dialogerai.server.param.ErrorCode;
 import info.mengnan.dialogerai.server.param.R;
@@ -14,6 +13,7 @@ import info.mengnan.dialogerai.server.param.document.DocumentContentResponse;
 import info.mengnan.dialogerai.server.param.document.DocumentInfoResponse;
 import info.mengnan.dialogerai.server.service.DocumentProcessService;
 import info.mengnan.dialogerai.server.service.KnowledgeBaseService;
+import info.mengnan.dialogerai.server.service.MemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -33,6 +33,7 @@ public class DocumentController {
     private final DocumentInfoRepository documentInfoRepository;
     private final KnowledgeBaseService knowledgeBaseService;
     private final DocumentProcessService documentProcessService;
+    private final MemberService memberService;
 
     /**
      * 在指定知识库中上传文档，立即返回 documentId 和 taskId
@@ -50,6 +51,12 @@ public class DocumentController {
             return R.error(ErrorCode.FILE_INVALID);
 
         Long memberId = StpUtil.getLoginIdAsLong();
+        boolean isOwner = memberService.isOwner(memberId);
+        List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
+        KnowledgeBase kb = knowledgeBaseService.findByIdWithReadAccess(kbId, memberId, isOwner, teamMemberIds);
+        if (!memberId.equals(kb.getMemberId()) && !isOwner)
+            return R.error(ErrorCode.KB_WRITE_DENIED);
+
         try {
             return R.ok(documentProcessService.upload(file, kbId, type, cleaningJson, memberId));
         } catch (IOException e) {
@@ -64,9 +71,9 @@ public class DocumentController {
     @GetMapping("/list")
     public R listDocuments(@RequestParam("kbId") Long kbId) {
         Long memberId = StpUtil.getLoginIdAsLong();
-        KnowledgeBase kb = knowledgeBaseService.findById(kbId, memberId);
-        if (kb == null)
-            return R.error(ErrorCode.KB_NOT_FOUND);
+        boolean isOwner = memberService.isOwner(memberId);
+        List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
+        knowledgeBaseService.findByIdWithReadAccess(kbId, memberId, isOwner, teamMemberIds);
 
         List<DocumentInfoResponse> docs = documentInfoRepository.findByKbId(kbId)
                 .stream()

@@ -3,6 +3,8 @@ package info.mengnan.dialogerai.server.controller;
 import cn.dev33.satoken.stp.StpUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import info.mengnan.dialogerai.repository.entity.BizConfig;
+import info.mengnan.dialogerai.repository.entity.ChatMember;
+import info.mengnan.dialogerai.repository.repo.MemberRepository;
 import info.mengnan.dialogerai.server.exception.BusinessException;
 import info.mengnan.dialogerai.server.param.ErrorCode;
 import info.mengnan.dialogerai.server.param.R;
@@ -19,6 +21,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 应用配置
@@ -32,6 +36,7 @@ public class ConfigController {
 
     private final BizConfigService bizConfigService;
     private final MemberService memberService;
+    private final MemberRepository memberRepository;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
@@ -43,10 +48,17 @@ public class ConfigController {
         Long memberId = StpUtil.getLoginIdAsLong();
         boolean isOwner = memberService.isOwner(memberId);
         List<Long> teamIds = memberService.resolveTeamMemberIds(memberId);
-        List<AppConfigItemResponse> list = bizConfigService.listByMembers(teamIds).stream()
-                .map(row -> isOwner || row.getMemberId().equals(memberId)
-                        ? toMaskedResponse(row)
-                        : toFullyMaskedResponse(row))
+        List<BizConfig> configs = bizConfigService.listByMembers(teamIds);
+        Map<Long, String> memberNameMap = memberRepository.list(teamIds).stream()
+                .collect(Collectors.toMap(ChatMember::getId, m -> m.getNickname() != null ? m.getNickname() : m.getUsername()));
+        List<AppConfigItemResponse> list = configs.stream()
+                .map(row -> {
+                    AppConfigItemResponse resp = isOwner || row.getMemberId().equals(memberId)
+                            ? toMaskedResponse(row)
+                            : toFullyMaskedResponse(row);
+                    resp.setCreatorName(memberNameMap.get(row.getMemberId()));
+                    return resp;
+                })
                 .toList();
         return R.ok(list);
     }

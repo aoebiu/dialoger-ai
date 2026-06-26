@@ -101,8 +101,11 @@ public class KnowledgeBaseService {
         return KnowledgeBaseResponse.from(kb, documentInfoRepository.countByKbId(kbId));
     }
 
-    public List<KnowledgeBaseResponse> list(Long memberId) {
-        List<KnowledgeBase> knowledgeBaseList = knowledgeBaseRepository.findByMemberId(memberId);
+    public List<KnowledgeBaseResponse> list(Long memberId, boolean isOwner, List<Long> teamMemberIds) {
+        List<KnowledgeBase> knowledgeBaseList = isOwner
+                ? knowledgeBaseRepository.findByMemberIds(teamMemberIds)
+                : knowledgeBaseRepository.findVisibleByMemberId(memberId, teamMemberIds);
+
         List<Long> kbIds = knowledgeBaseList.stream().map(KnowledgeBase::getId).toList();
         Map<Long, Long> kbCountMap = documentInfoRepository.countDocsGroupedByKbIds(kbIds);
 
@@ -119,11 +122,11 @@ public class KnowledgeBaseService {
                 .toList();
     }
 
-    public KnowledgeBaseResponse getKnowledgeBase(Long kbId, Long memberId) {
-        KnowledgeBase kb = findById(kbId, memberId);
+    public KnowledgeBaseResponse getKnowledgeBase(Long kbId, Long memberId, boolean isOwner, List<Long> teamMemberIds) {
+        KnowledgeBase kb = findByIdWithReadAccess(kbId, memberId, isOwner, teamMemberIds);
 
         syncBuildProgressIfNeeded(kb, memberId);
-        kb = findById(kbId, memberId);
+        kb = findByIdWithReadAccess(kbId, memberId, isOwner, teamMemberIds);
         return KnowledgeBaseResponse.from(kb, documentInfoRepository.countByKbId(kbId));
     }
 
@@ -155,6 +158,20 @@ public class KnowledgeBaseService {
         if (kb == null || !memberId.equals(kb.getMemberId()))
             throw new BusinessException(ErrorCode.KB_NOT_FOUND);
         return kb;
+    }
+
+    /**
+     * 读取访问校验：创建者始终可访问；OWNER 可访问团队任意 KB；MEMBER 可访问团队公开 KB。
+     */
+    public KnowledgeBase findByIdWithReadAccess(Long kbId, Long memberId, boolean isOwner, List<Long> teamMemberIds) {
+        KnowledgeBase kb = knowledgeBaseRepository.findById(kbId);
+        if (kb == null || kb.getDeleted() != null && kb.getDeleted() == 1)
+            throw new BusinessException(ErrorCode.KB_NOT_FOUND);
+        if (memberId.equals(kb.getMemberId())) return kb;
+        if (!teamMemberIds.contains(kb.getMemberId()))
+            throw new BusinessException(ErrorCode.KB_NOT_FOUND);
+        if (isOwner || "public".equals(kb.getVisibility())) return kb;
+        throw new BusinessException(ErrorCode.KB_NOT_FOUND);
     }
 
     private void deleteKnowledgeBase(KnowledgeBase kb) {

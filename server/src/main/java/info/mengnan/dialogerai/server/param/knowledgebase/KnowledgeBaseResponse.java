@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 public class KnowledgeBaseResponse {
 
     private Long id;
+    private Long memberId;
     private String name;
     private String description;
     private String visibility;
@@ -25,6 +26,7 @@ public class KnowledgeBaseResponse {
     public static KnowledgeBaseResponse from(KnowledgeBase kb, long documentCount) {
         KnowledgeBaseResponse resp = new KnowledgeBaseResponse();
         resp.setId(kb.getId());
+        resp.setMemberId(kb.getMemberId());
         resp.setName(kb.getName());
         resp.setDescription(kb.getDescription());
         resp.setVisibility(kb.getVisibility());

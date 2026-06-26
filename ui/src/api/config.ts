@@ -9,6 +9,7 @@ export interface BizConfigItem {
   remark: string | null
   createdAt: string | null
   updatedAt: string | null
+  creatorName?: string | null
 }
 
 export interface BizConfigSaveBody {

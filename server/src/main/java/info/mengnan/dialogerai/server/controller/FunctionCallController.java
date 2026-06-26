@@ -5,9 +5,12 @@ import info.mengnan.dialogerai.common.util.JSONUtil;
 import info.mengnan.dialogerai.rag.constant.promptTemplate.PromptTemplateConstant;
 import info.mengnan.dialogerai.rag.service.DirectModelInvoker;
 import info.mengnan.dialogerai.rag.service.PromptTemplateManager;
+import info.mengnan.dialogerai.repository.entity.ChatMember;
 import info.mengnan.dialogerai.repository.entity.ChatToolDescription;
+import info.mengnan.dialogerai.repository.repo.MemberRepository;
 import info.mengnan.dialogerai.repository.repo.ToolDescriptionRepository;
 import info.mengnan.dialogerai.server.param.functionCall.FunctionCallRequest;
+import info.mengnan.dialogerai.server.param.functionCall.FunctionCallResponse;
 import info.mengnan.dialogerai.server.param.functionCall.FunctionCallScriptGenerateRequest;
 import info.mengnan.dialogerai.server.param.functionCall.FunctionCallTestCaseGenerateRequest;
 import info.mengnan.dialogerai.server.param.functionCall.FunctionCallTestRequest;
@@ -25,6 +28,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Function Call 工具管理控制器
@@ -41,6 +46,7 @@ public class FunctionCallController {
     private final ToolAdapterService toolAdapterService;
     private final AsyncTaskService asyncTaskService;
     private final MemberService memberService;
+    private final MemberRepository memberRepository;
 
     /**
      * 获取团队所有工具列表（OWNER 和 MEMBER 均可查看团队全部脚本）
@@ -50,7 +56,13 @@ public class FunctionCallController {
         Long memberId = StpUtil.getLoginIdAsLong();
         List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
         List<ChatToolDescription> tools = toolDescriptionService.findByMemberIds(teamMemberIds);
-        return R.ok(tools);
+        List<Long> memberIds = tools.stream().map(ChatToolDescription::getMemberId).distinct().toList();
+        Map<Long, String> memberNameMap = memberRepository.list(memberIds).stream()
+                .collect(Collectors.toMap(ChatMember::getId, m -> m.getNickname() != null ? m.getNickname() : m.getUsername()));
+        List<FunctionCallResponse> result = tools.stream()
+                .map(t -> FunctionCallResponse.from(t, memberNameMap.get(t.getMemberId())))
+                .toList();
+        return R.ok(result);
     }
 
     /**

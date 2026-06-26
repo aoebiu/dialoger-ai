@@ -19,6 +19,32 @@ public interface KnowledgeBaseMapper extends BaseMapper<KnowledgeBase> {
                 .orderByDesc(KnowledgeBase::getCreatedAt));
     }
 
+    /** OWNER：团队所有成员的全部知识库 */
+    default List<KnowledgeBase> findByMemberIds(List<Long> memberIds) {
+        if (memberIds == null || memberIds.isEmpty()) return List.of();
+        return selectList(new LambdaQueryWrapper<KnowledgeBase>()
+                .in(KnowledgeBase::getMemberId, memberIds)
+                .eq(KnowledgeBase::getDeleted, 0)
+                .orderByDesc(KnowledgeBase::getCreatedAt));
+    }
+
+    /** MEMBER：自己所有 + 团队其他成员公开的知识库 */
+    default List<KnowledgeBase> findVisibleByMemberId(Long selfMemberId, List<Long> teamMemberIds) {
+        if (teamMemberIds == null || teamMemberIds.isEmpty()) {
+            return findByMemberId(selfMemberId);
+        }
+        return selectList(new LambdaQueryWrapper<KnowledgeBase>()
+                .eq(KnowledgeBase::getDeleted, 0)
+                .and(w -> w
+                        .eq(KnowledgeBase::getMemberId, selfMemberId)
+                        .or(o -> o
+                                .in(KnowledgeBase::getMemberId, teamMemberIds)
+                                .eq(KnowledgeBase::getVisibility, "public")
+                        )
+                )
+                .orderByDesc(KnowledgeBase::getCreatedAt));
+    }
+
     default List<KnowledgeBase> findActiveByMemberId(Long memberId) {
         return selectList(new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getMemberId, memberId)

@@ -21,4 +21,5 @@ public class AppConfigItemResponse {
     private String remark;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String creatorName;
 }

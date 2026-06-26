@@ -45,6 +45,7 @@
                       <span>描述</span>
                       <span>可见范围</span>
                       <span>文档数</span>
+                      <span>创建者</span>
                       <span>创建时间</span>
                       <span>操作</span>
                     </div>
@@ -64,6 +65,7 @@
                       <span class="kb-desc" :title="kb.description || ''">{{ kb.description || '-' }}</span>
                       <span>{{ kb.visibility === 'public' ? '公开' : '私有' }}</span>
                       <span>{{ kb.documentCount }}</span>
+                      <span>{{ kb.creatorName || '-' }}</span>
                       <span class="doc-created-at">{{ formatDate(kb.createdAt) }}</span>
                       <div class="upload-actions">
                         <button
@@ -75,6 +77,7 @@
                           管理知识库
                         </button>
                         <button
+                          v-if="auth.isOwner || kb.memberId === auth.user?.id"
                           type="button"
                           class="delete-btn"
                           title="删除知识库"
@@ -262,6 +265,7 @@
                   <div class="list-header">
                     <span>配置键</span>
                     <span>备注</span>
+                    <span>创建者</span>
                     <span>更新时间</span>
                     <span>操作</span>
                   </div>
@@ -273,6 +277,7 @@
                     <div class="account-info biz-config-info">
                       <span class="biz-config-key" :title="row.configKey">{{ row.configKey }}</span>
                       <span class="biz-config-remark">{{ row.remark || '—' }}</span>
+                      <span>{{ row.creatorName || '-' }}</span>
                       <span class="apikey-meta">{{ formatDate(row.updatedAt) }}</span>
                     </div>
                     <div class="upload-actions">
@@ -792,6 +797,7 @@
                   <div class="list-header">
                     <span>工具名称</span>
                     <span>工具描述</span>
+                    <span>创建者</span>
                     <span>创建时间</span>
                     <span>操作</span>
                   </div>
@@ -803,6 +809,7 @@
                     <div class="account-info fc-info">
                       <span class="fc-name">{{ item.name }}</span>
                       <span class="fc-desc" :title="item.description">{{ item.description }}</span>
+                      <span>{{ item.creatorName || '-' }}</span>
                       <span class="apikey-meta">{{ formatDate(item.createdAt) }}</span>
                     </div>
                     <div class="upload-actions">
@@ -1902,14 +1909,14 @@ onMounted(() => {
   gap: 1rem;
 }
 
-/* 知识库列表 6 列布局 */
+/* 知识库列表 7 列布局 */
 .kb-list .list-header {
-  grid-template-columns: 1.2fr 1.5fr 80px 70px 150px 150px;
+  grid-template-columns: 1.2fr 1.5fr 80px 70px 100px 150px 150px;
   padding: 0.75rem 1.25rem;
 }
 
 .kb-list .upload-item {
-  grid-template-columns: 1.2fr 1.5fr 80px 70px 150px 150px;
+  grid-template-columns: 1.2fr 1.5fr 80px 70px 100px 150px 150px;
   padding: 0.8rem 1.25rem;
 }
 
@@ -2231,7 +2238,7 @@ onMounted(() => {
 .biz-config-list .list-header,
 .biz-config-list .account-item {
   display: grid;
-  grid-template-columns: minmax(100px, 1.4fr) 72px minmax(80px, 1.2fr) 130px 100px;
+  grid-template-columns: minmax(100px, 1.4fr) minmax(80px, 1.2fr) 100px 130px 100px;
   align-items: center;
   gap: 0.75rem;
   padding-left: 1.25rem;
@@ -2805,7 +2812,7 @@ onMounted(() => {
 .fc-list .list-header,
 .fc-list .account-item {
   display: grid;
-  grid-template-columns: 150px 1fr 140px 140px;
+  grid-template-columns: 150px 1fr 100px 140px 140px;
   align-items: center;
   gap: 1rem;
   padding-left: 1.25rem;
