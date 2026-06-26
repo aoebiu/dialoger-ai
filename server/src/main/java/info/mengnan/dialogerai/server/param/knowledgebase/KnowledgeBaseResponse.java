@@ -20,6 +20,7 @@ public class KnowledgeBaseResponse {
     private LocalDateTime createdAt;
     private Integer topK;
     private Double score;
+    private String creatorName;
 
     public static KnowledgeBaseResponse from(KnowledgeBase kb, long documentCount) {
         KnowledgeBaseResponse resp = new KnowledgeBaseResponse();

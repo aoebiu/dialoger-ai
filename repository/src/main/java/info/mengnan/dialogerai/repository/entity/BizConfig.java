@@ -24,14 +24,9 @@ public class BizConfig {
     private String configKey;
 
     /**
-     * 配置值；当 encryptStorage 为 true 时为 AES-GCM 密文（Base64）
+     * 配置值
      */
     private String configValue;
-
-    /**
-     * 是否在落库前加密存储
-     */
-    private Boolean encryptStorage;
 
     private String remark;
 

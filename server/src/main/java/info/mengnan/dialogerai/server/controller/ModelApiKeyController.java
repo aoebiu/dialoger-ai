@@ -6,6 +6,7 @@ import info.mengnan.dialogerai.repository.entity.ChatApiKey;
 import info.mengnan.dialogerai.repository.repo.ChatApiKeyRepository;
 import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.server.param.apiKey.ModelApiKeyResponse;
+import info.mengnan.dialogerai.server.service.MemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -24,14 +25,16 @@ import java.util.List;
 public class ModelApiKeyController {
 
     private final ChatApiKeyRepository chatApiKeyService;
+    private final MemberService memberService;
 
     /**
-     * 获取当前用户的模型列表
+     * 获取当前团队的模型列表（OWNER 查自己的，MEMBER 查关联 OWNER 的）
      */
     @GetMapping("/list")
     public R listModels() {
         Long memberId = StpUtil.getLoginIdAsLong();
-        List<ChatApiKey> keys = chatApiKeyService.findAll(memberId);
+        Long ownerId = memberService.resolveResourceOwnerId(memberId);
+        List<ChatApiKey> keys = chatApiKeyService.findAll(ownerId);
         List<ModelApiKeyResponse> list = keys.stream().map(k -> {
             ModelApiKeyResponse response = new ModelApiKeyResponse();
             response.setId(k.getId());
@@ -46,7 +49,7 @@ public class ModelApiKeyController {
     }
 
     /**
-     * 创建新的模型 API Key
+     * 创建新的模型 API Key（仅 OWNER 可操作）
      */
     @PostMapping("/create")
     public R createApiKey(@RequestParam(name = "modelName") String modelName,
@@ -60,6 +63,9 @@ public class ModelApiKeyController {
         }
 
         Long memberId = StpUtil.getLoginIdAsLong();
+        if (!memberService.isOwner(memberId)) {
+            return R.error("仅 Owner 可执行此操作");
+        }
 
         ChatApiKey entity = new ChatApiKey();
         entity.setMemberId(memberId);
@@ -81,14 +87,18 @@ public class ModelApiKeyController {
     }
 
     /**
-     * 删除模型 API Key
+     * 删除模型 API Key（仅 OWNER 可操作，且只能删除本团队的 Key）
      */
     @DeleteMapping("/{id}")
     public R deleteApiKey(@PathVariable(name = "id") Long id) {
         Long memberId = StpUtil.getLoginIdAsLong();
+        if (!memberService.isOwner(memberId)) {
+            return R.error("仅 Owner 可执行此操作");
+        }
 
         ChatApiKey chatApiKey = chatApiKeyService.findById(id);
-        if (chatApiKey == null || !memberId.equals(chatApiKey.getMemberId())) {
+        List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
+        if (chatApiKey == null || !teamMemberIds.contains(chatApiKey.getMemberId())) {
             return R.error("该 API Key 无法删除");
         }
 

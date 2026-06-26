@@ -25,6 +25,10 @@ public class ToolDescriptionRepository {
         return mapper.findByMemberId(memberId);
     }
 
+    public List<ChatToolDescription> findByMemberIds(List<Long> memberIds) {
+        return mapper.findByMemberIds(memberIds);
+    }
+
     public void insert(ChatToolDescription entity) {
         mapper.insert(entity);
     }

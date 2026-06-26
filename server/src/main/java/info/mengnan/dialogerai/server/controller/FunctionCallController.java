@@ -15,6 +15,7 @@ import info.mengnan.dialogerai.server.param.functionCall.ToolCapabilityAnalysisR
 import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.repository.enums.AsyncTaskType;
 import info.mengnan.dialogerai.server.service.AsyncTaskService;
+import info.mengnan.dialogerai.server.service.MemberService;
 import info.mengnan.dialogerai.server.service.ToolAdapterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,19 +40,21 @@ public class FunctionCallController {
     private final PromptTemplateManager promptTemplateManager;
     private final ToolAdapterService toolAdapterService;
     private final AsyncTaskService asyncTaskService;
+    private final MemberService memberService;
 
     /**
-     * 获取当前用户的所有工具列表
+     * 获取团队所有工具列表（OWNER 和 MEMBER 均可查看团队全部脚本）
      */
     @GetMapping("/list")
     public R list() {
         Long memberId = StpUtil.getLoginIdAsLong();
-        List<ChatToolDescription> tools = toolDescriptionService.findByMemberId(memberId);
+        List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
+        List<ChatToolDescription> tools = toolDescriptionService.findByMemberIds(teamMemberIds);
         return R.ok(tools);
     }
 
     /**
-     * 根据 ID 获取工具详情
+     * 根据 ID 获取工具详情（团队内均可查看）
      */
     @GetMapping("/{id}")
     public R getById(@PathVariable("id") Long id) {
@@ -60,7 +63,7 @@ public class FunctionCallController {
             return R.error("工具不存在");
 
         Long memberId = StpUtil.getLoginIdAsLong();
-        if (!memberId.equals(tool.getMemberId()))
+        if (!isTeamTool(memberId, tool))
             return R.unauthorized();
         return R.ok(tool);
     }
@@ -163,7 +166,9 @@ public class FunctionCallController {
         if (tool == null)
             return R.error("工具不存在");
 
-        if (!memberId.equals(tool.getMemberId()))
+        if (!isTeamTool(memberId, tool))
+            return R.unauthorized();
+        if (!memberService.isOwner(memberId) && !memberId.equals(tool.getMemberId()))
             return R.unauthorized();
 
         tool.setName(request.getName());
@@ -178,7 +183,7 @@ public class FunctionCallController {
     }
 
     /**
-     * 删除工具
+     * 删除工具（OWNER 可删除团队内任意工具，MEMBER 只能删除自己的工具）
      */
     @DeleteMapping("/{id}")
     public R delete(@PathVariable("id") Long id) {
@@ -188,9 +193,10 @@ public class FunctionCallController {
         if (tool == null) {
             return R.error("工具不存在");
         }
-        if (!memberId.equals(tool.getMemberId())) {
+        if (!isTeamTool(memberId, tool))
             return R.unauthorized();
-        }
+        if (!memberService.isOwner(memberId) && !memberId.equals(tool.getMemberId()))
+            return R.unauthorized();
 
         toolDescriptionService.deleteById(id);
         log.info("User {} deleted function call tool: {} id={}", memberId, tool.getName(), id);
@@ -199,7 +205,7 @@ public class FunctionCallController {
     }
 
     /**
-     * 测试工具执行
+     * 测试工具执行（团队内均可测试）
      */
     @PostMapping("/{id}/test")
     public R test(@PathVariable("id") Long id, @RequestBody FunctionCallTestRequest request) {
@@ -209,9 +215,8 @@ public class FunctionCallController {
         if (tool == null) {
             return R.error("工具不存在");
         }
-        if (!memberId.equals(tool.getMemberId())) {
+        if (!isTeamTool(memberId, tool))
             return R.unauthorized();
-        }
 
         try {
             String result = toolAdapterService.executeTool(tool, request.getParameters());
@@ -223,7 +228,7 @@ public class FunctionCallController {
     }
 
     /**
-     * 根据工具信息，使用 AI 生成指定数量的批量测试用例
+     * 根据工具信息，使用 AI 生成指定数量的批量测试用例（团队内均可操作）
      */
     @PostMapping("/{id}/generate/testcases")
     public R generateTestCases(@PathVariable("id") Long id,
@@ -232,7 +237,7 @@ public class FunctionCallController {
 
         ChatToolDescription tool = toolDescriptionService.findById(id);
         if (tool == null) return R.error("工具不存在");
-        if (!memberId.equals(tool.getMemberId())) return R.unauthorized();
+        if (!isTeamTool(memberId, tool)) return R.unauthorized();
 
         Map<String, Object> testCaseVars = new HashMap<>();
         testCaseVars.put("count", request.getCount());
@@ -252,5 +257,10 @@ public class FunctionCallController {
             log.error("生成测试用例失败：{}", tool.getName(), e);
             return R.error("生成失败：" + e.getMessage());
         }
+    }
+
+    /** 判断工具是否属于当前用户所在团队 */
+    private boolean isTeamTool(Long memberId, ChatToolDescription tool) {
+        return memberService.resolveTeamMemberIds(memberId).contains(tool.getMemberId());
     }
 }

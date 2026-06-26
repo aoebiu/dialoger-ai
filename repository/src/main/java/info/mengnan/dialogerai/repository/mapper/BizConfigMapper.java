@@ -16,6 +16,13 @@ public interface BizConfigMapper extends BaseMapper<BizConfig> {
                 .orderByDesc(BizConfig::getUpdatedAt));
     }
 
+    default List<BizConfig> listByMemberIds(List<Long> memberIds) {
+        if (memberIds == null || memberIds.isEmpty()) return List.of();
+        return selectList(new LambdaQueryWrapper<BizConfig>()
+                .in(BizConfig::getMemberId, memberIds)
+                .orderByDesc(BizConfig::getUpdatedAt));
+    }
+
     default BizConfig findByMemberAndKey(Long memberId, String configKey) {
         return selectOne(new LambdaQueryWrapper<BizConfig>()
                 .eq(BizConfig::getMemberId, memberId)

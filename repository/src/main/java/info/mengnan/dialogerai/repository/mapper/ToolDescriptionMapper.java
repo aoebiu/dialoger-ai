@@ -36,4 +36,12 @@ public interface ToolDescriptionMapper extends BaseMapper<ChatToolDescription> {
                 .eq(ChatToolDescription::getMemberId, memberId);
         return selectList(qw);
     }
+
+    default List<ChatToolDescription> findByMemberIds(List<Long> memberIds) {
+        if (memberIds == null || memberIds.isEmpty()) return List.of();
+        LambdaQueryWrapper<ChatToolDescription> qw = new LambdaQueryWrapper<ChatToolDescription>()
+                .in(ChatToolDescription::getMemberId, memberIds)
+                .orderByAsc(ChatToolDescription::getMemberId);
+        return selectList(qw);
+    }
 }

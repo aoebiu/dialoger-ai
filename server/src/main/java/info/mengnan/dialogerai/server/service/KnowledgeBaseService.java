@@ -3,8 +3,10 @@ package info.mengnan.dialogerai.server.service;
 import info.mengnan.dialogerai.repository.entity.KnowledgeBase;
 import info.mengnan.dialogerai.repository.enums.KnowledgeBaseStatus;
 import info.mengnan.dialogerai.repository.enums.DocumentStatus;
+import info.mengnan.dialogerai.repository.entity.ChatMember;
 import info.mengnan.dialogerai.repository.repo.DocumentInfoRepository;
 import info.mengnan.dialogerai.repository.repo.KnowledgeBaseRepository;
+import info.mengnan.dialogerai.repository.repo.MemberRepository;
 import info.mengnan.dialogerai.server.core.DocumentEmbedding;
 import info.mengnan.dialogerai.server.exception.BusinessException;
 import info.mengnan.dialogerai.server.param.ErrorCode;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -30,6 +33,7 @@ public class KnowledgeBaseService {
     private final DocumentInfoRepository documentInfoRepository;
     private final KnowledgeBaseBuildService knowledgeBaseBuildService;
     private final DocumentEmbedding documentEmbedding;
+    private final MemberRepository memberRepository;
 
     public KnowledgeBaseCreateResponse create(KnowledgeBaseRequest request) {
         Long memberId = request.getMemberId();
@@ -101,8 +105,17 @@ public class KnowledgeBaseService {
         List<KnowledgeBase> knowledgeBaseList = knowledgeBaseRepository.findByMemberId(memberId);
         List<Long> kbIds = knowledgeBaseList.stream().map(KnowledgeBase::getId).toList();
         Map<Long, Long> kbCountMap = documentInfoRepository.countDocsGroupedByKbIds(kbIds);
-        return knowledgeBaseRepository.findByMemberId(memberId).stream()
-                .map(kb -> KnowledgeBaseResponse.from(kb, kbCountMap.getOrDefault(kb.getId(), 0L)))
+
+        List<Long> memberIds = knowledgeBaseList.stream().map(KnowledgeBase::getMemberId).distinct().toList();
+        Map<Long, String> memberNameMap = memberRepository.list(memberIds).stream()
+                .collect(Collectors.toMap(ChatMember::getId, m -> m.getNickname() != null ? m.getNickname() : m.getUsername()));
+
+        return knowledgeBaseList.stream()
+                .map(kb -> {
+                    KnowledgeBaseResponse resp = KnowledgeBaseResponse.from(kb, kbCountMap.getOrDefault(kb.getId(), 0L));
+                    resp.setCreatorName(memberNameMap.get(kb.getMemberId()));
+                    return resp;
+                })
                 .toList();
     }
 

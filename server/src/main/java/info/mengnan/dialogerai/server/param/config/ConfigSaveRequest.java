@@ -14,11 +14,6 @@ public class ConfigSaveRequest {
     @Size(max = 8000)
     private String configValue;
 
-    /**
-     * 是否在写入数据库前加密（使用 {@link info.mengnan.dialogerai.common.crypto.ConfigValueCrypto} 内置密钥）
-     */
-    private boolean encryptStorage;
-
     @Size(max = 500)
     private String remark;
 }

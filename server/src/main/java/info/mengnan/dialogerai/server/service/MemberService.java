@@ -119,6 +119,20 @@ public class MemberService {
         return relation != null ? relation.getOwnerId() : memberId;
     }
 
+    /** 返回当前用户所在团队的全部 memberId（含 owner 本身） */
+    public List<Long> resolveTeamMemberIds(Long memberId) {
+        Long ownerId = resolveResourceOwnerId(memberId);
+        List<Long> ids = new java.util.ArrayList<>();
+        ids.add(ownerId);
+        ids.addAll(memberRelationRepository.listMemberIds(ownerId));
+        return ids;
+    }
+
+    public boolean isOwner(Long memberId) {
+        ChatMember member = memberRepository.find(memberId);
+        return member != null && member.getRole() == MemberRole.OWNER;
+    }
+
     @Transactional
     public TeamMemberResponse createMember(Long ownerId, CreateTeamMemberRequest request) {
         requireOwner(ownerId, null);

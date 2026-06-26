@@ -17,6 +17,10 @@ public class BizConfigRepository {
         return mapper.listByMemberId(memberId);
     }
 
+    public List<BizConfig> listByMembers(List<Long> memberIds) {
+        return mapper.listByMemberIds(memberIds);
+    }
+
     public BizConfig findByMemberAndKey(Long memberId, String configKey) {
         return mapper.findByMemberAndKey(memberId, configKey);
     }
