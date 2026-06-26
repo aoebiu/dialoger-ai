@@ -14,19 +14,19 @@ public class MemberRelationRepository {
 
     private final MemberRelationMapper mapper;
 
-    public ChatMemberRelation find(Long memberId) {
+    public ChatMemberRelation findByMemberId(Long memberId) {
         return mapper.selectOne(new LambdaQueryWrapper<ChatMemberRelation>()
                 .eq(ChatMemberRelation::getMemberId, memberId));
     }
 
-    public List<ChatMemberRelation> list(Long ownerId) {
+    public List<ChatMemberRelation> findByOwnerId(Long ownerId) {
         return mapper.selectList(new LambdaQueryWrapper<ChatMemberRelation>()
                 .eq(ChatMemberRelation::getOwnerId, ownerId)
                 .orderByDesc(ChatMemberRelation::getId));
     }
 
     public List<Long> listMemberIds(Long ownerId) {
-        return list(ownerId).stream()
+        return findByOwnerId(ownerId).stream()
                 .map(ChatMemberRelation::getMemberId)
                 .toList();
     }
@@ -35,11 +35,11 @@ public class MemberRelationRepository {
         mapper.insert(entity);
     }
 
-    public void update(ChatMemberRelation entity) {
+    public void updateById(ChatMemberRelation entity) {
         mapper.updateById(entity);
     }
 
-    public void delete(Long memberId) {
+    public void deleteByMemberId(Long memberId) {
         mapper.delete(new LambdaQueryWrapper<ChatMemberRelation>()
                 .eq(ChatMemberRelation::getMemberId, memberId));
     }

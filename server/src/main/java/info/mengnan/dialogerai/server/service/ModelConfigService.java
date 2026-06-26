@@ -40,7 +40,7 @@ public class ModelConfigService {
         }
 
         try {
-            List<ChatApiKey> apiKeys = chatApiKeyService.findAll(memberId);
+            List<ChatApiKey> apiKeys = chatApiKeyService.findByMemberId(memberId);
 
             ChatApiKey matchedKey = apiKeys.stream()
                     .filter(key -> modelType.n().equals(key.getKeyType()) && modelName.equals(key.getModelName()))
@@ -60,7 +60,7 @@ public class ModelConfigService {
     }
 
     public Map<ModelType, ModelConfig> loadModelConfigs(Long memberId) {
-        return chatApiKeyService.findAll(memberId).stream()
+        return chatApiKeyService.findByMemberId(memberId).stream()
                 .collect(Collectors.toMap(
                         chatApiKey -> ModelType.valueOf(chatApiKey.getKeyType().toUpperCase()),
                         this::buildModelConfig,

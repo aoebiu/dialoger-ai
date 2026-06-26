@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 public class AppConfigItemResponse {
 
     private Long id;
+    private Long memberId;
     private String configKey;
     /**
      * 脱敏后的展示值，非明文
@@ -17,8 +18,8 @@ public class AppConfigItemResponse {
      * 明文配置值，仅详情接口返回
      */
     private String configValue;
-    private boolean encryptStorage;
     private String remark;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String creatorName;
 }

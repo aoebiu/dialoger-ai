@@ -14,28 +14,26 @@ public class ChatApiKeyRepository {
     private final ChatApiKeyMapper mapper;
 
     public ChatApiKey findById(Long id) {
-        return mapper.findById(id);
+        return mapper.selectById(id);
     }
 
-    public List<ChatApiKey> findByIds(List<Long> id) {
-        return mapper.findByIds(id);
+    public List<ChatApiKey> findByIds(List<Long> ids) {
+        return mapper.findByIds(ids);
     }
 
-    public List<ChatApiKey> findAll(Long memberId) {
-        return mapper.findALl(memberId);
+    public List<ChatApiKey> findByMemberId(Long memberId) {
+        return mapper.findByMemberId(memberId);
     }
-
 
     public void insert(ChatApiKey entity) {
         mapper.insert(entity);
     }
 
-    public void update(ChatApiKey entity) {
+    public void updateById(ChatApiKey entity) {
         mapper.updateById(entity);
     }
 
     public void deleteById(Long id) {
         mapper.deleteById(id);
     }
-
 }

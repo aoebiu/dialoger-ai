@@ -13,8 +13,12 @@ public class BizConfigRepository {
 
     private final BizConfigMapper mapper;
 
-    public List<BizConfig> listByMember(Long memberId) {
-        return mapper.listByMemberId(memberId);
+    public List<BizConfig> findByMemberId(Long memberId) {
+        return mapper.findByMemberId(memberId);
+    }
+
+    public List<BizConfig> findByMemberIds(List<Long> memberIds) {
+        return mapper.findByMemberIds(memberIds);
     }
 
     public BizConfig findByMemberAndKey(Long memberId, String configKey) {
@@ -25,14 +29,11 @@ public class BizConfigRepository {
         mapper.insert(entity);
     }
 
-    public void update(BizConfig entity) {
+    public void updateById(BizConfig entity) {
         mapper.updateById(entity);
     }
 
-    public void deleteByMemberAndKey(Long memberId, String configKey) {
-        BizConfig row = mapper.findByMemberAndKey(memberId, configKey);
-        if (row != null) {
-            mapper.deleteById(row.getId());
-        }
+    public void deleteById(Long id) {
+        mapper.deleteById(id);
     }
 }

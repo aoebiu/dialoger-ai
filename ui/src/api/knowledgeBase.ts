@@ -4,6 +4,7 @@ export type KnowledgeBaseStatus = 'DRAFT' | 'ACTIVE'
 
 export interface KnowledgeBaseItem {
   id: number
+  memberId: number
   name: string
   description: string | null
   visibility: string
@@ -14,6 +15,7 @@ export interface KnowledgeBaseItem {
   createdAt: string | null
   topK?: number | null
   score?: number | null
+  creatorName?: string | null
 }
 
 export interface KnowledgeBaseCreatePayload {

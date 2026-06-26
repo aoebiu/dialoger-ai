@@ -1,43 +1,38 @@
 package info.mengnan.dialogerai.server.param.apiKey;
 
+import info.mengnan.dialogerai.repository.entity.ChatApiKey;
 import lombok.Data;
 import java.time.LocalDateTime;
 
-/**
- * 模型 API Key 视图对象
- */
 @Data
 public class ModelApiKeyResponse {
 
     private Long id;
-
-    /**
-     * 模型名称
-     */
     private String modelName;
-
-    /**
-     * 模型提供商
-     */
     private String modelProvider;
-
-    /**
-     * API Key 类型
-     */
     private String keyType;
-
-    /**
-     * 脱敏后的 API Key
-     */
     private String maskedApiKey;
-
-    /**
-     * 模型调参参数 JSON (例如: temperature, topP, maxTokens)
-     */
     private String param;
-
-    /**
-     * 创建时间
-     */
     private LocalDateTime createdAt;
+
+    public static ModelApiKeyResponse from(ChatApiKey key) {
+        ModelApiKeyResponse response = new ModelApiKeyResponse();
+        response.setId(key.getId());
+        response.setModelName(key.getModelName());
+        response.setModelProvider(key.getModelProvider());
+        response.setKeyType(key.getKeyType());
+        response.setCreatedAt(key.getCreatedAt());
+        return response;
+    }
+
+    public static ModelApiKeyResponse fromMasked(ChatApiKey key) {
+        ModelApiKeyResponse response = from(key);
+        response.setMaskedApiKey(maskApiKey(key.getApiKey()));
+        return response;
+    }
+
+    private static String maskApiKey(String apiKey) {
+        if (apiKey == null || apiKey.length() < 8) return "****";
+        return apiKey.substring(0, 4) + "****" + apiKey.substring(apiKey.length() - 4);
+    }
 }

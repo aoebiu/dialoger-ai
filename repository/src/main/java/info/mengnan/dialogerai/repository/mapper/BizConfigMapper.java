@@ -10,9 +10,15 @@ import java.util.List;
 @Mapper
 public interface BizConfigMapper extends BaseMapper<BizConfig> {
 
-    default List<BizConfig> listByMemberId(Long memberId) {
+    default List<BizConfig> findByMemberId(Long memberId) {
         return selectList(new LambdaQueryWrapper<BizConfig>()
                 .eq(BizConfig::getMemberId, memberId)
+                .orderByDesc(BizConfig::getUpdatedAt));
+    }
+
+    default List<BizConfig> findByMemberIds(List<Long> memberIds) {
+        return selectList(new LambdaQueryWrapper<BizConfig>()
+                .in(BizConfig::getMemberId, memberIds)
                 .orderByDesc(BizConfig::getUpdatedAt));
     }
 

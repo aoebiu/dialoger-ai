@@ -42,7 +42,6 @@ public class ChatController {
     private final ChatSessionService chatSessionService;
     private final ChatMessageService chatMessageService;
     private final ChatMessageToolExecutionService chatMessageToolExecutionService;
-    private final DirectModelInvoker directModelInvoker;
     private final ChatMessageRagSourceRepository ragSourceRepository;
 
     /**

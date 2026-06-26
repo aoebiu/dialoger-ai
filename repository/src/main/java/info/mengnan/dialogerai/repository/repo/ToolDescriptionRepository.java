@@ -14,7 +14,7 @@ public class ToolDescriptionRepository {
     private final ToolDescriptionMapper mapper;
 
     public ChatToolDescription findById(Long id) {
-        return mapper.findById(id);
+        return mapper.selectById(id);
     }
 
     public ChatToolDescription findByNameAndMemberId(String name, Long memberId) {
@@ -25,16 +25,19 @@ public class ToolDescriptionRepository {
         return mapper.findByMemberId(memberId);
     }
 
+    public List<ChatToolDescription> findByMemberIds(List<Long> memberIds) {
+        return mapper.findByMemberIds(memberIds);
+    }
+
     public void insert(ChatToolDescription entity) {
         mapper.insert(entity);
     }
 
-    public void update(ChatToolDescription entity) {
+    public void updateById(ChatToolDescription entity) {
         mapper.updateById(entity);
     }
 
     public void deleteById(Long id) {
         mapper.deleteById(id);
     }
-
 }

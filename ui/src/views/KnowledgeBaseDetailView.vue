@@ -20,8 +20,8 @@
           </div>
         </div>
         <div class="kb-page-header-actions">
-          <button type="button" class="primary-action-btn" @click="goToUpload">上传文档</button>
-          <button type="button" class="refresh-btn" @click="openEditModal">编辑</button>
+          <button v-if="canWrite" type="button" class="primary-action-btn" @click="goToUpload">上传文档</button>
+          <button v-if="canWrite" type="button" class="refresh-btn" @click="openEditModal">编辑</button>
           <button type="button" class="refresh-btn" :disabled="loadingDocs" @click="loadDocuments">
             {{ loadingDocs ? '刷新中…' : '刷新' }}
           </button>
@@ -208,14 +208,14 @@
                     <span class="col-time">{{ formatDate(doc.createdAt) }}</span>
                     <div class="col-actions">
                       <button type="button" class="edit-btn" @click="goToDocumentDetail(doc)">详情</button>
-                      <button type="button" class="delete-btn" @click="confirmDelete(doc)">删除</button>
+                      <button v-if="canWrite" type="button" class="delete-btn" @click="confirmDelete(doc)">删除</button>
                     </div>
                   </div>
                 </div>
               </div>
               <div v-else class="table-empty">
                 <p>暂无文档</p>
-                <button type="button" class="primary-action-btn" @click="goToUpload">上传文档</button>
+                <button v-if="canWrite" type="button" class="primary-action-btn" @click="goToUpload">上传文档</button>
               </div>
             </div>
           </div>
@@ -233,6 +233,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import type { KnowledgeBaseItem } from '@/api/knowledgeBase'
 import { getKnowledgeBase, updateKnowledgeBase } from '@/api/knowledgeBase'
 import type { DocumentInfoItem } from '@/api/document'
@@ -241,9 +242,12 @@ import { toastError } from '@/utils/toast'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const kbId = Number(route.params.kbId)
 
 const kb = ref<KnowledgeBaseItem | null>(null)
+
+const canWrite = computed(() => auth.isOwner || kb.value?.memberId === auth.user?.id)
 const loadingKb = ref(true)
 const documentList = ref<DocumentInfoItem[]>([])
 const loadingDocs = ref(false)

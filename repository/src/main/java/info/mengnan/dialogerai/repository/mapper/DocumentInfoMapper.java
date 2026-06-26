@@ -2,6 +2,7 @@ package info.mengnan.dialogerai.repository.mapper;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import info.mengnan.dialogerai.repository.entity.DocumentInfo;
 import org.apache.ibatis.annotations.Mapper;
@@ -48,13 +49,6 @@ public interface DocumentInfoMapper extends BaseMapper<DocumentInfo> {
                 .eq(DocumentInfo::getDeleted, 0));
     }
 
-    default DocumentInfo findByIdAndMemberId(Long id, Long memberId) {
-        return selectOne(new LambdaQueryWrapper<DocumentInfo>()
-                .eq(DocumentInfo::getId, id)
-                .eq(DocumentInfo::getMemberId, memberId)
-                .eq(DocumentInfo::getDeleted, 0));
-    }
-
     default Map<Long, Long> countDocsByKbIds(List<Long> kbIds) {
         QueryWrapper<DocumentInfo> wrapper = new QueryWrapper<>();
         wrapper.in("kb_id", kbIds)
@@ -68,5 +62,11 @@ public interface DocumentInfoMapper extends BaseMapper<DocumentInfo> {
                         m -> (Long) m.get("kb_id"),
                         m -> (Long) m.get("count")
                 ));
+    }
+
+    default void deleteByIds(List<Long> ids) {
+        update(null, new LambdaUpdateWrapper<DocumentInfo>()
+                .in(DocumentInfo::getId, ids)
+                .set(DocumentInfo::getDeleted, 1));
     }
 }

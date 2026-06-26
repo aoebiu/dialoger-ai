@@ -3,51 +3,31 @@ package info.mengnan.dialogerai.server.controller;
 import cn.dev33.satoken.stp.StpUtil;
 import info.mengnan.dialogerai.common.util.JSONUtil;
 import info.mengnan.dialogerai.repository.entity.ChatApiKey;
-import info.mengnan.dialogerai.repository.repo.ChatApiKeyRepository;
 import info.mengnan.dialogerai.server.param.R;
-import info.mengnan.dialogerai.server.param.apiKey.ModelApiKeyResponse;
+import info.mengnan.dialogerai.server.service.MemberService;
+import info.mengnan.dialogerai.server.service.ModelApiKeyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import static info.mengnan.dialogerai.server.param.ErrorCode.*;
 
-/**
- * 模型 API Key 控制器
- * 用于管理外部模型的 API Key（chat_api_key 表）
- * 区别于 chat_project_api_key（本项目创建的 API Key）
- */
 @Slf4j
 @RestController
 @RequestMapping("/api/model")
 @RequiredArgsConstructor
 public class ModelApiKeyController {
 
-    private final ChatApiKeyRepository chatApiKeyService;
+    private final ModelApiKeyService modelApiKeyService;
+    private final MemberService memberService;
 
-    /**
-     * 获取当前用户的模型列表
-     */
     @GetMapping("/list")
     public R listModels() {
         Long memberId = StpUtil.getLoginIdAsLong();
-        List<ChatApiKey> keys = chatApiKeyService.findAll(memberId);
-        List<ModelApiKeyResponse> list = keys.stream().map(k -> {
-            ModelApiKeyResponse response = new ModelApiKeyResponse();
-            response.setId(k.getId());
-            response.setModelName(k.getModelName());
-            response.setModelProvider(k.getModelProvider());
-            response.setKeyType(k.getKeyType());
-            response.setMaskedApiKey(maskApiKey(k.getApiKey()));
-            response.setCreatedAt(k.getCreatedAt());
-            return response;
-        }).toList();
-        return R.ok(list);
+        Long ownerId = memberService.resolveResourceOwnerId(memberId);
+        return R.ok(modelApiKeyService.list(ownerId));
     }
 
-    /**
-     * 创建新的模型 API Key
-     */
     @PostMapping("/create")
     public R createApiKey(@RequestParam(name = "modelName") String modelName,
                           @RequestParam(name = "modelProvider") String modelProvider,
@@ -55,49 +35,33 @@ public class ModelApiKeyController {
                           @RequestParam(name = "apiKey") String apiKey,
                           @RequestParam(name = "param", required = false) String param) {
 
-        if (param != null && !param.isBlank() && !JSONUtil.isJsonObj(param)) {
-            return R.error("param 必须是合法的 JSON 对象");
-        }
+        if (modelName == null || modelName.isBlank()
+                || modelProvider == null || modelProvider.isBlank()
+                || keyType == null || keyType.isBlank()
+                || apiKey == null || apiKey.isBlank()
+                || (param != null && !param.isBlank() && !JSONUtil.isJsonObj(param)))
+            return R.error(MODEL_PARAM_INVALID);
 
         Long memberId = StpUtil.getLoginIdAsLong();
+        if (!memberService.isOwner(memberId))
+            return R.error(MEMBER_OWNER_REQUIRED);
 
-        ChatApiKey entity = new ChatApiKey();
-        entity.setMemberId(memberId);
-        entity.setModelName(modelName);
-        entity.setModelProvider(modelProvider);
-        entity.setKeyType(keyType);
-        entity.setApiKey(apiKey);
-
-        chatApiKeyService.insert(entity);
-        log.info("User {} created Model API Key: {} for model {}", memberId, entity.getId(), modelName);
-
-        ModelApiKeyResponse response = new ModelApiKeyResponse();
-        response.setId(entity.getId());
-        response.setModelName(entity.getModelName());
-        response.setModelProvider(entity.getModelProvider());
-        response.setKeyType(entity.getKeyType());
-        response.setCreatedAt(entity.getCreatedAt());
-        return R.ok(response);
+        return R.ok(modelApiKeyService.create(memberId, modelName, modelProvider, keyType, apiKey));
     }
 
-    /**
-     * 删除模型 API Key
-     */
     @DeleteMapping("/{id}")
     public R deleteApiKey(@PathVariable(name = "id") Long id) {
         Long memberId = StpUtil.getLoginIdAsLong();
+        if (!memberService.isOwner(memberId))
+            return R.error(MEMBER_OWNER_REQUIRED);
 
-        ChatApiKey chatApiKey = chatApiKeyService.findById(id);
-        if (chatApiKey == null || !memberId.equals(chatApiKey.getMemberId())) {
-            return R.error("该 API Key 无法删除");
-        }
+        ChatApiKey chatApiKey = modelApiKeyService.findById(id);
+        if (chatApiKey == null)
+            return R.error(MODEL_KEY_NOT_FOUND);
+        if (!memberService.resolveTeamMemberIds(memberId).contains(chatApiKey.getMemberId()))
+            return R.error(MODEL_KEY_DELETE_DENIED);
 
-        chatApiKeyService.deleteById(id);
+        modelApiKeyService.delete(id);
         return R.ok();
-    }
-
-    private static String maskApiKey(String apiKey) {
-        if (apiKey == null || apiKey.length() < 8) return "****";
-        return apiKey.substring(0, 4) + "****" + apiKey.substring(apiKey.length() - 4);
     }
 }

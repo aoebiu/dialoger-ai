@@ -17,7 +17,7 @@ public class ChatMember {
 
     private String password;
 
-    private String nickname;
+    // private String nickname;
 
     private String phone;
 

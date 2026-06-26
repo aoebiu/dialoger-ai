@@ -30,6 +30,14 @@ public class KnowledgeBaseRepository {
         return mapper.findByMemberId(memberId);
     }
 
+    public List<KnowledgeBase> findByMemberIds(List<Long> memberIds) {
+        return mapper.findByMemberIds(memberIds);
+    }
+
+    public List<KnowledgeBase> findPublicByMemberIds(List<Long> memberIds) {
+        return mapper.findPublicByMemberIds(memberIds);
+    }
+
     public List<KnowledgeBase> findActiveByMemberId(Long memberId) {
         return mapper.findActiveByMemberId(memberId);
     }

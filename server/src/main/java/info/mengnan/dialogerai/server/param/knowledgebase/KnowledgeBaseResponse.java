@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 public class KnowledgeBaseResponse {
 
     private Long id;
+    private Long memberId;
     private String name;
     private String description;
     private String visibility;
@@ -20,20 +21,27 @@ public class KnowledgeBaseResponse {
     private LocalDateTime createdAt;
     private Integer topK;
     private Double score;
+    private String creatorName;
 
     public static KnowledgeBaseResponse from(KnowledgeBase kb, long documentCount) {
         KnowledgeBaseResponse resp = new KnowledgeBaseResponse();
         resp.setId(kb.getId());
+        resp.setMemberId(kb.getMemberId());
         resp.setName(kb.getName());
         resp.setDescription(kb.getDescription());
         resp.setVisibility(kb.getVisibility());
         resp.setStatus(kb.getStatus());
         resp.setIndexName(kb.getIndexName());
-        resp.setDocumentCount(documentCount);
         resp.setBuildTaskId(kb.getBuildTaskId());
         resp.setTopK(kb.getTopK());
         resp.setScore(kb.getScore());
         resp.setCreatedAt(kb.getCreatedAt());
+        return resp;
+    }
+
+    public static KnowledgeBaseResponse from(KnowledgeBase kb,String creatorName, long documentCount) {
+        KnowledgeBaseResponse resp = from(kb, documentCount);
+        resp.setCreatorName(creatorName);
         return resp;
     }
 }

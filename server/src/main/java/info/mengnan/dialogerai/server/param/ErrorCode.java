@@ -18,6 +18,7 @@ public enum ErrorCode {
     // 知识库
     KB_NOT_FOUND("2001", "知识库不存在"),
     KB_NAME_EMPTY("2002", "知识库名称不能为空"),
+    KB_WRITE_DENIED("2003", "无权操作该知识库"),
 
     // 文档
     DOC_DUPLICATE("3001", "该知识库中已存在同名文档"),
@@ -37,6 +38,23 @@ public enum ErrorCode {
     MEMBER_PHONE_EXISTS("4009", "手机号已被注册"),
     MEMBER_OWNER_REQUIRED("4010", "仅 Owner 可执行此操作"),
     MEMBER_MANAGE_DENIED("4011", "无权管理该用户"),
+
+    // 模型 API Key
+    MODEL_KEY_NOT_FOUND("5001", "模型 API Key 不存在"),
+    MODEL_PARAM_INVALID("5002", "缺少必要参数或参数格式不合法"),
+    MODEL_KEY_DELETE_DENIED("5003", "无权删除该 API Key"),
+
+    // 应用配置
+    CONFIG_NOT_FOUND("7001", "配置不存在"),
+
+    // Function Call
+    FC_PARAM_INVALID("6001", "工具不存在或参数不合法"),
+    FC_ACCESS_DENIED("6002", "无权访问该工具"),
+    FC_WRITE_DENIED("6003", "无权修改或删除该工具"),
+    FC_PROMPT_EMPTY("6004", "提示词不能为空"),
+    FC_TEST_COUNT_INVALID("6005", "测试用例数量需在 1~20 之间"),
+    FC_EXECUTE_FAILED("6006", "工具执行失败"),
+    FC_GENERATE_FAILED("6007", "生成失败"),
     ;
 
     private final String code;

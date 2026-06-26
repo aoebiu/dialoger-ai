@@ -6,14 +6,13 @@ import info.mengnan.dialogerai.repository.enums.DocumentStatus;
 import info.mengnan.dialogerai.repository.entity.DocumentInfo;
 import info.mengnan.dialogerai.repository.entity.KnowledgeBase;
 import info.mengnan.dialogerai.repository.repo.DocumentInfoRepository;
-import info.mengnan.dialogerai.repository.repo.KnowledgeBaseRepository;
-import info.mengnan.dialogerai.server.exception.BusinessException;
 import info.mengnan.dialogerai.server.param.ErrorCode;
 import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.server.param.document.DocumentContentResponse;
 import info.mengnan.dialogerai.server.param.document.DocumentInfoResponse;
 import info.mengnan.dialogerai.server.service.DocumentProcessService;
 import info.mengnan.dialogerai.server.service.KnowledgeBaseService;
+import info.mengnan.dialogerai.server.service.MemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -33,6 +32,7 @@ public class DocumentController {
     private final DocumentInfoRepository documentInfoRepository;
     private final KnowledgeBaseService knowledgeBaseService;
     private final DocumentProcessService documentProcessService;
+    private final MemberService memberService;
 
     /**
      * 在指定知识库中上传文档，立即返回 documentId 和 taskId
@@ -50,6 +50,18 @@ public class DocumentController {
             return R.error(ErrorCode.FILE_INVALID);
 
         Long memberId = StpUtil.getLoginIdAsLong();
+        KnowledgeBase kb = knowledgeBaseService.findById(kbId);
+        if (kb == null || kb.getDeleted() != null && kb.getDeleted() == 1)
+            return R.error(ErrorCode.KB_NOT_FOUND);
+
+        boolean isOwner = memberService.isOwner(memberId);
+        List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
+        if (!hasReadAccess(memberId, kb, isOwner, teamMemberIds))
+            return R.error(ErrorCode.KB_NOT_FOUND);
+
+        if (!memberId.equals(kb.getMemberId()) && !isOwner)
+            return R.error(ErrorCode.KB_WRITE_DENIED);
+
         try {
             return R.ok(documentProcessService.upload(file, kbId, type, cleaningJson, memberId));
         } catch (IOException e) {
@@ -64,8 +76,13 @@ public class DocumentController {
     @GetMapping("/list")
     public R listDocuments(@RequestParam("kbId") Long kbId) {
         Long memberId = StpUtil.getLoginIdAsLong();
-        KnowledgeBase kb = knowledgeBaseService.findById(kbId, memberId);
-        if (kb == null)
+        KnowledgeBase kb = knowledgeBaseService.findById(kbId);
+        if (kb == null || kb.getDeleted() != null && kb.getDeleted() == 1)
+            return R.error(ErrorCode.KB_NOT_FOUND);
+
+        boolean isOwner = memberService.isOwner(memberId);
+        List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
+        if (!hasReadAccess(memberId, kb, isOwner, teamMemberIds))
             return R.error(ErrorCode.KB_NOT_FOUND);
 
         List<DocumentInfoResponse> docs = documentInfoRepository.findByKbId(kbId)
@@ -78,7 +95,7 @@ public class DocumentController {
     @GetMapping("/{documentId}")
     public R getDocument(@PathVariable("documentId") Long documentId) {
         Long memberId = StpUtil.getLoginIdAsLong();
-        DocumentInfo doc = documentInfoRepository.findByIdAndMemberId(documentId, memberId);
+        DocumentInfo doc = documentInfoRepository.findById(documentId);
         if (doc == null)
             return R.error(ErrorCode.DOC_NOT_FOUND);
 
@@ -89,7 +106,7 @@ public class DocumentController {
     public R getDocumentContent(@PathVariable("documentId") Long documentId,
                                 @RequestParam(value = "maxSegments", defaultValue = "500") Integer maxSegments) {
         Long memberId = StpUtil.getLoginIdAsLong();
-        DocumentInfo doc = documentInfoRepository.findByIdAndMemberId(documentId, memberId);
+        DocumentInfo doc = documentInfoRepository.findById(documentId);
         if (doc == null)
             return R.error(ErrorCode.DOC_NOT_FOUND);
 
@@ -119,7 +136,7 @@ public class DocumentController {
     @DeleteMapping("/{documentId}")
     public R deleteDocument(@PathVariable("documentId") Long documentId) {
         Long memberId = StpUtil.getLoginIdAsLong();
-        DocumentInfo doc = documentInfoRepository.findByIdAndMemberId(documentId, memberId);
+        DocumentInfo doc = documentInfoRepository.findById(documentId);
         if (doc == null)
             return R.error(ErrorCode.DOC_NOT_FOUND);
 
@@ -135,5 +152,16 @@ public class DocumentController {
         log.info("document deleted: documentId={}, kbId={}, indexName={}",
                 documentId, doc.getKbId(), doc.getIndexName());
         return R.ok();
+    }
+
+    /**
+     * 读取访问校验：创建者始终可访问；OWNER 可访问团队任意 KB；MEMBER 可访问团队公开 KB。
+     */
+    private boolean hasReadAccess(Long memberId, KnowledgeBase kb, boolean isOwner, List<Long> teamMemberIds) {
+        if (memberId.equals(kb.getMemberId()))
+            return true;
+        if (!teamMemberIds.contains(kb.getMemberId()))
+            return false;
+        return isOwner || "public".equals(kb.getVisibility());
     }
 }

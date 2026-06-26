@@ -4,7 +4,6 @@ import info.mengnan.dialogerai.repository.entity.DocumentInfo;
 import info.mengnan.dialogerai.repository.entity.KnowledgeBase;
 import info.mengnan.dialogerai.repository.enums.DocumentStatus;
 import info.mengnan.dialogerai.repository.repo.DocumentInfoRepository;
-import info.mengnan.dialogerai.repository.repo.KnowledgeBaseRepository;
 import info.mengnan.dialogerai.server.core.storage.FileUploadStorage;
 import info.mengnan.dialogerai.server.exception.BusinessException;
 import info.mengnan.dialogerai.server.param.ErrorCode;
@@ -36,10 +35,7 @@ public class DocumentProcessService {
     public DocumentUploadResponse upload(MultipartFile file, Long kbId, String type, String cleaningJson, Long memberId) throws IOException {
         String originalFilename = file.getOriginalFilename();
 
-        KnowledgeBase kb = knowledgeBaseService.findById(kbId, memberId);
-        if (kb == null)
-            throw new BusinessException(ErrorCode.KB_NOT_FOUND);
-
+        KnowledgeBase kb = knowledgeBaseService.findById(kbId);
         if (documentInfoRepository.findByKbIdAndOriginalName(kbId, originalFilename) != null)
             throw new BusinessException(ErrorCode.DOC_DUPLICATE);
 

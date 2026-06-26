@@ -24,6 +24,7 @@
           <div class="fc-section-header">
             <h2 class="fc-section-title">AI 生成工具描述</h2>
             <button
+              v-if="!isReadonly"
               type="button"
               class="btn-generate"
               :disabled="generatingScript"
@@ -36,6 +37,7 @@
               class="fc-input fc-textarea"
               placeholder="描述你想要的工具功能，例如：查询指定城市的天气信息，需要传入城市名称"
               rows="3"
+              :disabled="isReadonly"
             />
             <div class="generate-progress">
               <div
@@ -64,7 +66,7 @@
             v-model="functionCallForm.name"
             type="text"
             class="fc-input"
-            :disabled="isEdit"
+            :disabled="isEdit || isReadonly"
             placeholder="例如：weatherQuery"
           />
         </section>
@@ -76,7 +78,7 @@
             v-model="functionCallForm.description"
             type="text"
             class="fc-input"
-            :disabled="isEdit"
+            :disabled="isEdit || isReadonly"
             placeholder="例如：查询指定城市的天气信息"
           />
         </section>
@@ -91,7 +93,7 @@
               class="property-row"
             >
               <label class="property-checkbox">
-                <input type="checkbox" v-model="prop.required" />
+                <input type="checkbox" v-model="prop.required" :disabled="isReadonly" />
                 <span>必需</span>
               </label>
               <input
@@ -99,16 +101,18 @@
                 type="text"
                 class="fc-input property-input"
                 placeholder="参数名"
+                :disabled="isReadonly"
               />
               <input
                 v-model="prop.description"
                 type="text"
                 class="fc-input property-input property-input-desc"
                 placeholder="参数描述"
+                :disabled="isReadonly"
               />
-              <button type="button" class="property-remove-btn" @click="removeFunctionCallProperty(index)">删除</button>
+              <button v-if="!isReadonly" type="button" class="property-remove-btn" @click="removeFunctionCallProperty(index)">删除</button>
             </div>
-            <button type="button" class="property-add-btn" @click="addFunctionCallProperty">+ 添加属性</button>
+            <button v-if="!isReadonly" type="button" class="property-add-btn" @click="addFunctionCallProperty">+ 添加属性</button>
           </div>
         </section>
 
@@ -117,7 +121,7 @@
           <div class="fc-section-header">
             <h2 class="fc-section-title">执行脚本</h2>
             <div class="fc-section-actions">
-              <button type="button" class="btn-secondary" @click="formatExecuteScript">格式化</button>
+              <button v-if="!isReadonly" type="button" class="btn-secondary" @click="formatExecuteScript">格式化</button>
             </div>
           </div>
           <Codemirror
@@ -126,6 +130,7 @@
             placeholder="function execute(params) { ... }"
             :style="{ minHeight: '240px' }"
             class="fc-code-editor"
+            :disabled="isReadonly"
           />
 
           <!-- 调试区域（可折叠） -->
@@ -324,7 +329,7 @@
         <!-- 底部操作栏 -->
         <div class="fc-detail-footer">
           <button type="button" class="btn-cancel" @click="goBack">返回列表</button>
-          <div class="fc-footer-save-pair" role="presentation">
+          <div v-if="!isReadonly" class="fc-footer-save-pair" role="presentation">
             <button
               type="button"
               class="btn-secondary fc-footer-save-btn"
@@ -360,14 +365,23 @@ import { js_beautify } from 'js-beautify'
 import { Codemirror } from 'vue-codemirror'
 import { javascript } from '@codemirror/lang-javascript'
 import { oneDark } from '@codemirror/theme-one-dark'
+import { useAuthStore } from '@/stores/auth'
 
 const cmExtensions = [javascript(), oneDark]
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 
 const isEdit = computed(() => route.name === 'functionCallDetail')
 const functionCallId = computed(() => isEdit.value ? Number(route.params.id) : null)
+
+// 当前工具的 memberId（加载后赋值）
+const toolMemberId = ref<number | null>(null)
+// OWNER 可操作所有工具；MEMBER 仅可操作自己创建的工具；新建模式始终可编辑
+const isReadonly = computed(() =>
+  isEdit.value && !auth.isOwner && toolMemberId.value !== auth.user?.id
+)
 
 // 加载状态
 const loading = ref(false)
@@ -475,6 +489,7 @@ async function loadDetail() {
     const res = await getFunctionCallById(functionCallId.value)
     if (res.success && res.data) {
       const item = res.data
+      toolMemberId.value = item.memberId
       functionCallForm.value = {
         name: item.name,
         description: item.description,

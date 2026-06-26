@@ -45,6 +45,7 @@
                       <span>描述</span>
                       <span>可见范围</span>
                       <span>文档数</span>
+                      <span>创建者</span>
                       <span>创建时间</span>
                       <span>操作</span>
                     </div>
@@ -64,6 +65,7 @@
                       <span class="kb-desc" :title="kb.description || ''">{{ kb.description || '-' }}</span>
                       <span>{{ kb.visibility === 'public' ? '公开' : '私有' }}</span>
                       <span>{{ kb.documentCount }}</span>
+                      <span>{{ kb.creatorName || '-' }}</span>
                       <span class="doc-created-at">{{ formatDate(kb.createdAt) }}</span>
                       <div class="upload-actions">
                         <button
@@ -75,6 +77,7 @@
                           管理知识库
                         </button>
                         <button
+                          v-if="auth.isOwner || kb.memberId === auth.user?.id"
                           type="button"
                           class="delete-btn"
                           title="删除知识库"
@@ -261,8 +264,8 @@
                   <div class="account-list biz-config-list">
                   <div class="list-header">
                     <span>配置键</span>
-                    <span>加密存储</span>
                     <span>备注</span>
+                    <span>创建者</span>
                     <span>更新时间</span>
                     <span>操作</span>
                   </div>
@@ -273,13 +276,18 @@
                   >
                     <div class="account-info biz-config-info">
                       <span class="biz-config-key" :title="row.configKey">{{ row.configKey }}</span>
-                      <span class="biz-config-flag">{{ row.encryptStorage ? '是' : '否' }}</span>
                       <span class="biz-config-remark">{{ row.remark || '—' }}</span>
+                      <span>{{ row.creatorName || '-' }}</span>
                       <span class="apikey-meta">{{ formatDate(row.updatedAt) }}</span>
                     </div>
                     <div class="upload-actions">
-                      <button type="button" class="edit-btn" @click="openBizConfigModal(row)">编辑</button>
                       <button
+                        type="button"
+                        class="edit-btn"
+                        @click="openBizConfigModal(row)"
+                      >{{ auth.isOwner || row.memberId === auth.user?.id ? '编辑' : '预览' }}</button>
+                      <button
+                        v-if="auth.isOwner || row.memberId === auth.user?.id"
                         type="button"
                         class="delete-btn"
                         @click="confirmDeleteBizConfig(row)"
@@ -298,7 +306,7 @@
           <div v-if="showBizConfigModal" class="modal-overlay">
             <div class="modal-content modal-wide">
               <div class="modal-header">
-                <h2 class="modal-title">{{ bizConfigEditing ? '编辑外部服务配置' : '添加外部服务配置' }}</h2>
+                <h2 class="modal-title">{{ bizConfigReadonly ? '预览外部服务配置' : bizConfigEditing ? '编辑外部服务配置' : '添加外部服务配置' }}</h2>
                 <button type="button" class="modal-close" @click="closeBizConfigModal">×</button>
               </div>
               <div class="modal-body">
@@ -308,7 +316,7 @@
                     v-model="bizConfigForm.configKey"
                     type="text"
                     class="form-input"
-                    :disabled="!!bizConfigEditing"
+                    :disabled="!!bizConfigEditing || bizConfigReadonly"
                     placeholder="例如：amap.credentials（库中一条记录的主键）"
                   />
                 </div>
@@ -316,6 +324,11 @@
                   <label class="form-label">配置项（子键 / 子值）<span class="required">*</span></label>
                   <p class="form-hint">至少保留一行；空行会被忽略。保存时将多行合并为 JSON 对象写入「配置值」字段。</p>
                   <div class="property-list biz-config-pair-list">
+                    <div class="biz-config-pair-header">
+                      <span>子键</span>
+                      <span>子值</span>
+                      <span v-if="!bizConfigReadonly" class="biz-config-pair-header-spacer" />
+                    </div>
                     <div
                       v-for="(pair, index) in bizConfigPairs"
                       :key="index"
@@ -325,34 +338,34 @@
                         v-model="pair.key"
                         type="text"
                         class="form-input property-input"
-                        placeholder="子键，如 webServiceKey"
+                        :disabled="bizConfigReadonly"
+                        placeholder="如 webServiceKey"
                       />
                       <input
                         v-model="pair.value"
                         type="text"
                         class="form-input property-input"
-                        placeholder="子值"
+                        :disabled="bizConfigReadonly"
+                        placeholder="对应的值"
                       />
                       <button
+                        v-if="!bizConfigReadonly"
                         type="button"
                         class="property-remove-btn"
                         :disabled="bizConfigPairs.length <= 1"
+                        title="删除此行"
                         @click="removeBizConfigPair(index)"
                       >
-                        删除
+                        ×
                       </button>
                     </div>
-                    <button type="button" class="property-add-btn" @click="addBizConfigPair">+ 添加配置项</button>
+                    <button v-if="!bizConfigReadonly" type="button" class="property-add-btn" @click="addBizConfigPair">
+                      <span>＋</span> 添加配置项
+                    </button>
                   </div>
                   <p v-if="bizConfigEditing && loadingBizConfigDetail" class="form-hint">
                     正在加载配置值…
                   </p>
-                </div>
-                <div class="form-group">
-                  <label class="form-check">
-                    <input v-model="bizConfigForm.encryptStorage" type="checkbox" />
-                    <span>落库前加密存储</span>
-                  </label>
                 </div>
                 <div class="form-group">
                   <label class="form-label">备注</label>
@@ -360,14 +373,15 @@
                     v-model="bizConfigForm.remark"
                     type="text"
                     class="form-input"
+                    :disabled="bizConfigReadonly"
                     placeholder="可选，如：高德 Web 服务"
                   />
                 </div>
                 <p v-if="bizConfigFormError" class="form-error">{{ bizConfigFormError }}</p>
               </div>
               <div class="modal-footer">
-                <button type="button" class="btn-cancel" @click="closeBizConfigModal">取消</button>
-                <button type="button" class="btn-confirm" :disabled="submittingBizConfig" @click="submitBizConfig">
+                <button type="button" class="btn-cancel" @click="closeBizConfigModal">{{ bizConfigReadonly ? '关闭' : '取消' }}</button>
+                <button v-if="!bizConfigReadonly" type="button" class="btn-confirm" :disabled="submittingBizConfig" @click="submitBizConfig">
                   {{ submittingBizConfig ? '保存中…' : '保存' }}
                 </button>
               </div>
@@ -616,7 +630,7 @@
               <p class="page-desc">配置第三方模型的 API Key，支持 OpenAI、Anthropic、DeepSeek 等模型提供商。</p>
             </div>
             <div class="section-header-actions">
-              <button type="button" class="primary-action-btn" @click="showCreateModelModal = true">
+              <button v-if="auth.isOwner" type="button" class="primary-action-btn" @click="showCreateModelModal = true">
                 + 添加模型
               </button>
             </div>
@@ -666,6 +680,7 @@
                   </div>
                   <div class="upload-actions">
                     <button
+                      v-if="auth.isOwner"
                       type="button"
                       class="delete-btn"
                       @click="confirmDeleteModelKey(item)"
@@ -676,7 +691,7 @@
                 </div>
                 </div>
               </div>
-              <p v-else class="table-empty">暂无模型配置，点击上方按钮添加</p>
+              <p v-else class="table-empty">{{ auth.isOwner ? '暂无模型配置，点击上方按钮添加' : '暂无模型配置' }}</p>
             </div>
           </div>
         </div>
@@ -782,6 +797,7 @@
                   <div class="list-header">
                     <span>工具名称</span>
                     <span>工具描述</span>
+                    <span>创建者</span>
                     <span>创建时间</span>
                     <span>操作</span>
                   </div>
@@ -793,6 +809,7 @@
                     <div class="account-info fc-info">
                       <span class="fc-name">{{ item.name }}</span>
                       <span class="fc-desc" :title="item.description">{{ item.description }}</span>
+                      <span>{{ item.creatorName || '-' }}</span>
                       <span class="apikey-meta">{{ formatDate(item.createdAt) }}</span>
                     </div>
                     <div class="upload-actions">
@@ -801,9 +818,10 @@
                         class="edit-btn"
                         @click="router.push({ name: 'functionCallDetail', params: { id: item.id } })"
                       >
-                        编辑
+                        {{ auth.isOwner || item.memberId === auth.user?.id ? '编辑' : '预览' }}
                       </button>
                       <button
+                        v-if="auth.isOwner || item.memberId === auth.user?.id"
                         type="button"
                         class="delete-btn"
                         @click="confirmDeleteFunctionCall(item)"
@@ -896,6 +914,9 @@ const bizConfigEditing = ref<BizConfigItem | null>(null)
 const submittingBizConfig = ref(false)
 const loadingBizConfigDetail = ref(false)
 const bizConfigFormError = ref('')
+const bizConfigReadonly = computed(
+  () => auth.isMember && bizConfigEditing.value != null && bizConfigEditing.value.memberId !== auth.user?.id,
+)
 interface BizConfigPairRow {
   key: string
   value: string
@@ -903,7 +924,6 @@ interface BizConfigPairRow {
 
 const bizConfigForm = ref({
   configKey: '',
-  encryptStorage: true,
   remark: '',
 })
 
@@ -1356,14 +1376,13 @@ async function openBizConfigModal(row: BizConfigItem | null) {
     bizConfigPairs.value = bizConfigPairsFromListDisplay(row.displayValue)
     bizConfigForm.value = {
       configKey: row.configKey,
-      encryptStorage: row.encryptStorage,
       remark: row.remark || '',
     }
     showBizConfigModal.value = true
-    // 异步加载明文配置值
+    // 异步加载明文配置值（预览模式下后端会返回 KEY 保留、VALUE 全遮掩的结果）
     loadingBizConfigDetail.value = true
     try {
-      const res = await getBizConfigItem(row.configKey)
+      const res = await getBizConfigItem(row.configKey, row.memberId)
       if (res.success && res.data?.configValue) {
         bizConfigPairs.value = bizConfigPairsFromPlainValue(res.data.configValue)
       }
@@ -1376,7 +1395,6 @@ async function openBizConfigModal(row: BizConfigItem | null) {
     bizConfigPairs.value = [{ key: '', value: '' }]
     bizConfigForm.value = {
       configKey: '',
-      encryptStorage: true,
       remark: '',
     }
     showBizConfigModal.value = true
@@ -1407,9 +1425,8 @@ async function submitBizConfig() {
   try {
     const res = await saveBizConfigItem(key, {
       configValue: configValueJson,
-      encryptStorage: bizConfigForm.value.encryptStorage,
       remark: bizConfigForm.value.remark.trim() || undefined,
-    })
+    }, bizConfigEditing.value?.memberId)
     if (res.success) {
       toastSuccess('保存成功')
       closeBizConfigModal()
@@ -1425,14 +1442,14 @@ async function submitBizConfig() {
 }
 
 function confirmDeleteBizConfig(row: BizConfigItem) {
-  showConfirm(`确定删除外部服务配置「${row.configKey}」吗？删除后不可恢复。`, () => deleteBizConfigByKey(row.configKey))
+  showConfirm(`确定删除外部服务配置「${row.configKey}」吗？删除后不可恢复。`, () => deleteBizConfigByKey(row.configKey, row.memberId))
 }
 
-async function deleteBizConfigByKey(configKey: string) {
+async function deleteBizConfigByKey(configKey: string, memberId: number) {
   try {
-    const res = await deleteBizConfigItem(configKey)
+    const res = await deleteBizConfigItem(configKey, memberId)
     if (res.success) {
-      bizConfigList.value = bizConfigList.value.filter((r) => r.configKey !== configKey)
+      bizConfigList.value = bizConfigList.value.filter((r) => r.configKey !== configKey || r.memberId !== memberId)
       toastSuccess('已删除')
     }
   } catch (e: unknown) {
@@ -1892,14 +1909,14 @@ onMounted(() => {
   gap: 1rem;
 }
 
-/* 知识库列表 6 列布局 */
+/* 知识库列表 7 列布局 */
 .kb-list .list-header {
-  grid-template-columns: 1.2fr 1.5fr 80px 70px 150px 150px;
+  grid-template-columns: 1.2fr 1.5fr 80px 70px 100px 150px 150px;
   padding: 0.75rem 1.25rem;
 }
 
 .kb-list .upload-item {
-  grid-template-columns: 1.2fr 1.5fr 80px 70px 150px 150px;
+  grid-template-columns: 1.2fr 1.5fr 80px 70px 100px 150px 150px;
   padding: 0.8rem 1.25rem;
 }
 
@@ -2221,7 +2238,7 @@ onMounted(() => {
 .biz-config-list .list-header,
 .biz-config-list .account-item {
   display: grid;
-  grid-template-columns: minmax(100px, 1.4fr) 72px minmax(80px, 1.2fr) 130px 100px;
+  grid-template-columns: minmax(100px, 1.4fr) minmax(80px, 1.2fr) 100px 130px 100px;
   align-items: center;
   gap: 0.75rem;
   padding-left: 1.25rem;
@@ -2263,22 +2280,127 @@ onMounted(() => {
 }
 
 .biz-config-pair-list {
-  margin-top: 0.35rem;
+  margin-top: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--color-bg-page);
+}
+
+.biz-config-pair-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--color-bg-input);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.biz-config-pair-header span {
+  flex: 1;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.biz-config-pair-header-spacer {
+  flex: 0 0 30px !important;
 }
 
 .biz-config-pair-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  transition: background 0.15s ease;
+}
+
+.biz-config-pair-list .property-row:last-child {
+  border-bottom: none;
 }
 
 .biz-config-pair-row .property-input {
   flex: 1;
   min-width: 0;
+  background: transparent;
+  border-color: transparent;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.875rem;
+  border-radius: 6px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.biz-config-pair-row .property-input:not(:disabled):hover {
+  background: var(--color-bg-input);
+  border-color: var(--color-border);
+}
+
+.biz-config-pair-row .property-input:focus {
+  background: var(--color-bg-input);
+  border-color: var(--color-border-focus);
+}
+
+.biz-config-pair-row .property-input:disabled {
+  background: transparent;
+  cursor: default;
 }
 
 .biz-config-pair-row .property-remove-btn {
   flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--color-text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.biz-config-pair-row .property-remove-btn:hover:not(:disabled) {
+  color: var(--color-error);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.biz-config-pair-row .property-remove-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.property-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.55rem;
+  font-size: 0.875rem;
+  color: var(--color-text-tertiary);
+  background: transparent;
+  border: none;
+  border-top: 1px dashed var(--color-border);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+  border-radius: 0 0 10px 10px;
+}
+
+.property-add-btn:hover {
+  color: var(--color-text-accent);
+  background: rgba(99, 102, 241, 0.04);
+}
+
+.property-add-btn > span {
+  font-size: 1rem;
+  line-height: 1;
 }
 
 /* API Key 管理 - grid 布局 */
@@ -2690,7 +2812,7 @@ onMounted(() => {
 .fc-list .list-header,
 .fc-list .account-item {
   display: grid;
-  grid-template-columns: 150px 1fr 140px 140px;
+  grid-template-columns: 150px 1fr 100px 140px 140px;
   align-items: center;
   gap: 1rem;
   padding-left: 1.25rem;
@@ -2742,7 +2864,8 @@ onMounted(() => {
 }
 
 .modal-wide {
-  max-width: 600px;
+  max-width: 620px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .form-textarea {

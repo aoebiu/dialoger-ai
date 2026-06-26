@@ -53,14 +53,17 @@ public class DocumentInfoRepository {
         return mapper.countDocsByKbIds(kbIds);
     }
 
-    public DocumentInfo findByIdAndMemberId(Long id, Long memberId) {
-        return mapper.findByIdAndMemberId(id, memberId);
-    }
-
     public void deleteById(Long id) {
         DocumentInfo entity = new DocumentInfo();
         entity.setId(id);
         entity.setDeleted(1);
         mapper.updateById(entity);
+    }
+
+    public void deleteByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        mapper.deleteByIds(ids);
     }
 }

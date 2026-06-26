@@ -6,106 +6,85 @@ import info.mengnan.dialogerai.rag.constant.promptTemplate.PromptTemplateConstan
 import info.mengnan.dialogerai.rag.service.DirectModelInvoker;
 import info.mengnan.dialogerai.rag.service.PromptTemplateManager;
 import info.mengnan.dialogerai.repository.entity.ChatToolDescription;
-import info.mengnan.dialogerai.repository.repo.ToolDescriptionRepository;
+import info.mengnan.dialogerai.repository.enums.AsyncTaskType;
+import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.server.param.functionCall.FunctionCallRequest;
 import info.mengnan.dialogerai.server.param.functionCall.FunctionCallScriptGenerateRequest;
 import info.mengnan.dialogerai.server.param.functionCall.FunctionCallTestCaseGenerateRequest;
 import info.mengnan.dialogerai.server.param.functionCall.FunctionCallTestRequest;
 import info.mengnan.dialogerai.server.param.functionCall.ToolCapabilityAnalysisResult;
-import info.mengnan.dialogerai.server.param.R;
-import info.mengnan.dialogerai.repository.enums.AsyncTaskType;
 import info.mengnan.dialogerai.server.service.AsyncTaskService;
+import info.mengnan.dialogerai.server.service.FunctionCallService;
+import info.mengnan.dialogerai.server.service.MemberService;
 import info.mengnan.dialogerai.server.service.ToolAdapterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Function Call 工具管理控制器
- */
+import static info.mengnan.dialogerai.server.param.ErrorCode.*;
+
 @Slf4j
 @RestController
 @RequestMapping("/api/functioncall")
 @RequiredArgsConstructor
 public class FunctionCallController {
 
-    private final ToolDescriptionRepository toolDescriptionService;
+    private final FunctionCallService functionCallService;
+    private final MemberService memberService;
     private final DirectModelInvoker directModelInvoker;
     private final PromptTemplateManager promptTemplateManager;
     private final ToolAdapterService toolAdapterService;
     private final AsyncTaskService asyncTaskService;
 
-    /**
-     * 获取当前用户的所有工具列表
-     */
     @GetMapping("/list")
     public R list() {
         Long memberId = StpUtil.getLoginIdAsLong();
-        List<ChatToolDescription> tools = toolDescriptionService.findByMemberId(memberId);
-        return R.ok(tools);
+        return R.ok(functionCallService.list(memberService.resolveTeamMemberIds(memberId)));
     }
 
-    /**
-     * 根据 ID 获取工具详情
-     */
     @GetMapping("/{id}")
     public R getById(@PathVariable("id") Long id) {
-        ChatToolDescription tool = toolDescriptionService.findById(id);
+        ChatToolDescription tool = functionCallService.findById(id);
         if (tool == null)
-            return R.error("工具不存在");
+            return R.error(FC_PARAM_INVALID);
 
         Long memberId = StpUtil.getLoginIdAsLong();
-        if (!memberId.equals(tool.getMemberId()))
-            return R.unauthorized();
+        if (!hasTeamAccess(memberId, tool.getMemberId()))
+            return R.error(FC_ACCESS_DENIED);
+
         return R.ok(tool);
     }
 
-    /**
-     * 创建新工具
-     */
     @PostMapping("/create")
-    public R create(@Validated @RequestBody FunctionCallRequest request) {
+    public R create(@RequestBody FunctionCallRequest request) {
+        if (request.getName() == null || request.getName().isBlank())
+            return R.error(FC_PARAM_INVALID);
+        if (request.getDescription() == null || request.getDescription().isBlank())
+            return R.error(FC_PARAM_INVALID);
+
         Long memberId = StpUtil.getLoginIdAsLong();
-        ChatToolDescription existing = toolDescriptionService.findByNameAndMemberId(request.getName(), memberId);
-        if (existing != null) {
-            return R.error("工具名称已存在");
-        }
+        if (functionCallService.findByNameAndMemberId(request.getName().trim(), memberId) != null)
+            return R.error(FC_PARAM_INVALID);
 
-        ChatToolDescription entity = new ChatToolDescription();
-        entity.setMemberId(memberId);
-        entity.setName(request.getName());
-        entity.setDescription(request.getDescription());
-        entity.setProperty(request.getProperty());
-        entity.setRequired(request.getRequired());
-        entity.setExecute(request.getExecute());
-        entity.setGeneratePrompt(request.getGeneratePrompt());
-
-        toolDescriptionService.insert(entity);
-        log.info("User {} created function call tool: {}, id={}", memberId, entity.getName(), entity.getId());
-
-        return R.ok(entity);
+        return R.ok(functionCallService.create(memberId, request));
     }
 
-    /**
-     * 根据用户提示词，异步两阶段生成工具描述、属性列表与执行脚本
-     * 立即返回 taskId，前端轮询 /api/task/{taskId} 获取进度
-     * Phase 1: 分析用户需求需要哪些运行时能力
-     * Phase 2: 按需拼接能力说明，生成完整工具元数据
-     */
     @PostMapping("/generate/script")
-    public R generateScript(@Validated @RequestBody FunctionCallScriptGenerateRequest request) {
+    public R generateScript(@RequestBody FunctionCallScriptGenerateRequest request) {
+        if (request.getPrompt() == null || request.getPrompt().isBlank())
+            return R.error(FC_PROMPT_EMPTY);
+
         Long memberId = StpUtil.getLoginIdAsLong();
-        String taskId = asyncTaskService.createTask(memberId, AsyncTaskType.GENERATE_SCRIPT, List.of("能力分析", "生成工具元数据"));
+        String taskId = asyncTaskService.createTask(memberId, AsyncTaskType.GENERATE_SCRIPT,
+                List.of("能力分析", "生成工具元数据"));
 
         asyncTaskService.submitTask(taskId, () -> {
             String userPrompt = request.getPrompt();
             try {
-                // Phase 1: 能力分析
                 asyncTaskService.updateStepRunning(taskId, 1);
                 Map<String, Object> phase1Variables = Map.of("prompt", userPrompt);
                 String analysisResult = directModelInvoker.directInvoke(
@@ -113,12 +92,11 @@ public class FunctionCallController {
                         "tool_capability_analysis", phase1Variables);
                 ToolCapabilityAnalysisResult capabilities = JSONUtil.toBean(analysisResult, ToolCapabilityAnalysisResult.class);
 
-                // Phase 2: 动态拼接提示词并生成工具元数据
                 asyncTaskService.updateStepRunning(taskId, 2);
                 String baseTemplate = promptTemplateManager.getTemplate("tool_metadata_generation").template();
-
                 String result = directModelInvoker.directInvokeRaw(
-                        "generateScript.toolMetadataGenerator", generatePrompt(baseTemplate, capabilities, request.getPrompt()));
+                        "generateScript.toolMetadataGenerator",
+                        generatePrompt(baseTemplate, capabilities, request.getPrompt()));
 
                 asyncTaskService.completeTask(taskId, result);
             } catch (Exception e) {
@@ -130,109 +108,75 @@ public class FunctionCallController {
         return R.ok(Map.of("taskId", taskId));
     }
 
-
-    private String generatePrompt(String baseTemplate, ToolCapabilityAnalysisResult capabilities,String prompt) {
-        StringBuilder composedPrompt = new StringBuilder(baseTemplate);
-
-        int rulesIndex = composedPrompt.indexOf("## Rules");
-        if (rulesIndex == -1) {
-            rulesIndex = composedPrompt.length();
-        }
-        StringBuilder capabilitySection = new StringBuilder();
-        if (capabilities.isNeedsHttp()) {
-            capabilitySection.append(PromptTemplateConstant.TOOL_HTTP_CAPABILITY_SNIPPET);
-        }
-        if (capabilities.isNeedsConfig()) {
-            capabilitySection.append(PromptTemplateConstant.TOOL_CONFIG_CAPABILITY_SNIPPET);
-        }
-        if (capabilities.isNeedsJwt()) {
-            capabilitySection.append(PromptTemplateConstant.TOOL_JWT_CAPABILITY_SNIPPET);
-        }
-        composedPrompt.insert(rulesIndex, capabilitySection);
-        return composedPrompt.toString().replace("{{prompt}}", prompt);
-    }
-
-    /**
-     * 更新工具
-     */
     @PutMapping("/{id}")
-    public R update(@PathVariable("id") Long id, @Validated @RequestBody FunctionCallRequest request) {
-        Long memberId = StpUtil.getLoginIdAsLong();
-
-        ChatToolDescription tool = toolDescriptionService.findById(id);
+    public R update(@PathVariable("id") Long id, @RequestBody FunctionCallRequest request) {
+        ChatToolDescription tool = functionCallService.findById(id);
         if (tool == null)
-            return R.error("工具不存在");
+            return R.error(FC_PARAM_INVALID);
 
-        if (!memberId.equals(tool.getMemberId()))
-            return R.unauthorized();
+        Long memberId = StpUtil.getLoginIdAsLong();
+        if (!hasTeamAccess(memberId, tool.getMemberId()))
+            return R.error(FC_ACCESS_DENIED);
+        if (!hasWriteAccess(memberId, tool.getMemberId()))
+            return R.error(FC_WRITE_DENIED);
 
-        tool.setName(request.getName());
-        tool.setDescription(request.getDescription());
-        tool.setProperty(request.getProperty());
-        tool.setRequired(request.getRequired());
-        tool.setExecute(request.getExecute());
-        tool.setGeneratePrompt(request.getGeneratePrompt());
+        if (request.getName() == null || request.getName().isBlank())
+            return R.error(FC_PARAM_INVALID);
+        if (request.getDescription() == null || request.getDescription().isBlank())
+            return R.error(FC_PARAM_INVALID);
 
-        toolDescriptionService.update(tool);
-        return R.ok(tool);
+        return R.ok(functionCallService.update(id, request));
     }
 
-    /**
-     * 删除工具
-     */
     @DeleteMapping("/{id}")
     public R delete(@PathVariable("id") Long id) {
+        ChatToolDescription tool = functionCallService.findById(id);
+        if (tool == null)
+            return R.error(FC_PARAM_INVALID);
+
         Long memberId = StpUtil.getLoginIdAsLong();
+        if (!hasTeamAccess(memberId, tool.getMemberId()))
+            return R.error(FC_ACCESS_DENIED);
+        if (!hasWriteAccess(memberId, tool.getMemberId()))
+            return R.error(FC_WRITE_DENIED);
 
-        ChatToolDescription tool = toolDescriptionService.findById(id);
-        if (tool == null) {
-            return R.error("工具不存在");
-        }
-        if (!memberId.equals(tool.getMemberId())) {
-            return R.unauthorized();
-        }
-
-        toolDescriptionService.deleteById(id);
-        log.info("User {} deleted function call tool: {} id={}", memberId, tool.getName(), id);
-
+        functionCallService.delete(id);
+        log.info("function call tool deleted: memberId={}, toolId={}, name={}", memberId, id, tool.getName());
         return R.ok();
     }
 
-    /**
-     * 测试工具执行
-     */
     @PostMapping("/{id}/test")
     public R test(@PathVariable("id") Long id, @RequestBody FunctionCallTestRequest request) {
-        Long memberId = StpUtil.getLoginIdAsLong();
+        ChatToolDescription tool = functionCallService.findById(id);
+        if (tool == null)
+            return R.error(FC_PARAM_INVALID);
 
-        ChatToolDescription tool = toolDescriptionService.findById(id);
-        if (tool == null) {
-            return R.error("工具不存在");
-        }
-        if (!memberId.equals(tool.getMemberId())) {
-            return R.unauthorized();
-        }
+        Long memberId = StpUtil.getLoginIdAsLong();
+        if (!hasTeamAccess(memberId, tool.getMemberId()))
+            return R.error(FC_ACCESS_DENIED);
 
         try {
             String result = toolAdapterService.executeTool(tool, request.getParameters());
             return R.ok(Map.of("result", result != null ? result : "null"));
         } catch (Exception e) {
-            log.error("测试工具执行失败：{}", tool.getName(), e);
-            return R.error("执行失败：" + e.getMessage());
+            log.error("function call tool test failed: id={}, name={}", id, tool.getName(), e);
+            return R.error(FC_EXECUTE_FAILED);
         }
     }
 
-    /**
-     * 根据工具信息，使用 AI 生成指定数量的批量测试用例
-     */
     @PostMapping("/{id}/generate/testcases")
     public R generateTestCases(@PathVariable("id") Long id,
                                @RequestBody FunctionCallTestCaseGenerateRequest request) {
-        Long memberId = StpUtil.getLoginIdAsLong();
+        ChatToolDescription tool = functionCallService.findById(id);
+        if (tool == null)
+            return R.error(FC_PARAM_INVALID);
 
-        ChatToolDescription tool = toolDescriptionService.findById(id);
-        if (tool == null) return R.error("工具不存在");
-        if (!memberId.equals(tool.getMemberId())) return R.unauthorized();
+        Long memberId = StpUtil.getLoginIdAsLong();
+        if (!hasTeamAccess(memberId, tool.getMemberId()))
+            return R.error(FC_ACCESS_DENIED);
+
+        if (request.getCount() < 1 || request.getCount() > 20)
+            return R.error(FC_TEST_COUNT_INVALID);
 
         Map<String, Object> testCaseVars = new HashMap<>();
         testCaseVars.put("count", request.getCount());
@@ -249,8 +193,37 @@ public class FunctionCallController {
                     testCaseVars);
             return R.ok(Map.of("testCases", result));
         } catch (Exception e) {
-            log.error("生成测试用例失败：{}", tool.getName(), e);
-            return R.error("生成失败：" + e.getMessage());
+            log.error("function call test case generation failed: id={}, name={}", id, tool.getName(), e);
+            return R.error(FC_GENERATE_FAILED);
         }
+    }
+
+    private String generatePrompt(String baseTemplate, ToolCapabilityAnalysisResult capabilities, String prompt) {
+        StringBuilder composedPrompt = new StringBuilder(baseTemplate);
+
+        int rulesIndex = composedPrompt.indexOf("## Rules");
+        if (rulesIndex == -1)
+            rulesIndex = composedPrompt.length();
+
+        StringBuilder capabilitySection = new StringBuilder();
+        if (capabilities.isNeedsHttp())
+            capabilitySection.append(PromptTemplateConstant.TOOL_HTTP_CAPABILITY_SNIPPET);
+        if (capabilities.isNeedsConfig())
+            capabilitySection.append(PromptTemplateConstant.TOOL_CONFIG_CAPABILITY_SNIPPET);
+        if (capabilities.isNeedsJwt())
+            capabilitySection.append(PromptTemplateConstant.TOOL_JWT_CAPABILITY_SNIPPET);
+
+        composedPrompt.insert(rulesIndex, capabilitySection);
+        return composedPrompt.toString().replace("{{prompt}}", prompt);
+    }
+
+    private boolean hasTeamAccess(Long memberId, Long toolOwnerMemberId) {
+        return memberService.resolveTeamMemberIds(memberId).contains(toolOwnerMemberId);
+    }
+
+    private boolean hasWriteAccess(Long memberId, Long toolOwnerMemberId) {
+        if (memberService.isOwner(memberId))
+            return true;
+        return memberId.equals(toolOwnerMemberId);
     }
 }

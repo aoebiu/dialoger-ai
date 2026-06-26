@@ -6,7 +6,6 @@ import info.mengnan.dialogerai.repository.mapper.MemberMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -19,15 +18,11 @@ public class MemberRepository {
 
     private final MemberMapper mapper;
 
-    public ChatMember find(Long id) {
+    public ChatMember findById(Long id) {
         return mapper.selectById(id);
     }
 
-
-    public List<ChatMember> list(List<Long> ids) {
-        if (ids == null || ids.isEmpty()) {
-            return List.of();
-        }
+    public List<ChatMember> findByIds(List<Long> ids) {
         Map<Long, ChatMember> memberMap = mapper.selectBatchIds(ids).stream()
                 .collect(Collectors.toMap(ChatMember::getId, Function.identity()));
         return ids.stream()
@@ -36,7 +31,7 @@ public class MemberRepository {
                 .toList();
     }
 
-    public ChatMember find(String username) {
+    public ChatMember findByUsername(String username) {
         return mapper.selectOne(new LambdaQueryWrapper<ChatMember>()
                 .eq(ChatMember::getUsername, username));
     }
@@ -50,11 +45,11 @@ public class MemberRepository {
         mapper.insert(entity);
     }
 
-    public void update(ChatMember entity) {
+    public void updateById(ChatMember entity) {
         mapper.updateById(entity);
     }
 
-    public void delete(Long id) {
+    public void deleteById(Long id) {
         mapper.deleteById(id);
     }
 

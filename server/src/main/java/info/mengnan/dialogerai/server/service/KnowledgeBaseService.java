@@ -1,13 +1,14 @@
 package info.mengnan.dialogerai.server.service;
 
+import info.mengnan.dialogerai.repository.entity.DocumentInfo;
 import info.mengnan.dialogerai.repository.entity.KnowledgeBase;
 import info.mengnan.dialogerai.repository.enums.KnowledgeBaseStatus;
 import info.mengnan.dialogerai.repository.enums.DocumentStatus;
+import info.mengnan.dialogerai.repository.entity.ChatMember;
 import info.mengnan.dialogerai.repository.repo.DocumentInfoRepository;
 import info.mengnan.dialogerai.repository.repo.KnowledgeBaseRepository;
+import info.mengnan.dialogerai.repository.repo.MemberRepository;
 import info.mengnan.dialogerai.server.core.DocumentEmbedding;
-import info.mengnan.dialogerai.server.exception.BusinessException;
-import info.mengnan.dialogerai.server.param.ErrorCode;
 import info.mengnan.dialogerai.server.param.knowledgebase.KnowledgeBaseCreateResponse;
 import info.mengnan.dialogerai.server.param.knowledgebase.KnowledgeBaseRequest;
 import info.mengnan.dialogerai.server.param.knowledgebase.KnowledgeBaseResponse;
@@ -16,24 +17,25 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class KnowledgeBaseService {
 
-    private static final int DRAFT_RETENTION_DAYS = 1;
-
     private final KnowledgeBaseRepository knowledgeBaseRepository;
     private final DocumentInfoRepository documentInfoRepository;
     private final KnowledgeBaseBuildService knowledgeBaseBuildService;
     private final DocumentEmbedding documentEmbedding;
+    private final MemberRepository memberRepository;
 
     public KnowledgeBaseCreateResponse create(KnowledgeBaseRequest request) {
         Long memberId = request.getMemberId();
-        cleanupExpiredDrafts(memberId);
 
         KnowledgeBase kb = new KnowledgeBase();
         kb.setMemberId(memberId);
@@ -57,91 +59,92 @@ public class KnowledgeBaseService {
         return new KnowledgeBaseCreateResponse(kb.getId(), kb.getName(), kb.getIndexName(), kb.getStatus());
     }
 
-    public KnowledgeBaseResponse update(KnowledgeBaseRequest request) {
-        KnowledgeBase kb = findById(request.getKbId(), request.getMemberId());
-
+    public KnowledgeBaseResponse update(Long kbId, KnowledgeBaseRequest request) {
         KnowledgeBase updateKb = new KnowledgeBase();
-        updateKb.setId(kb.getId());
-        if (request.getName() != null && !request.getName().isBlank()) {
-            updateKb.setName(request.getName().trim());
-            kb.setName(updateKb.getName());
-        }
-        if (request.getDescription() != null) {
-            updateKb.setDescription(request.getDescription());
-            kb.setDescription(updateKb.getDescription());
-        }
-        if (request.getVisibility() != null && !request.getVisibility().isBlank()) {
-            updateKb.setVisibility(request.getVisibility());
-            kb.setVisibility(updateKb.getVisibility());
-        }
-        if (request.getTopK() != null && request.getScore() != null) {
-            kb.setTopK(request.getTopK());
-            kb.setScore(request.getScore());
-        }
-
+        updateKb.setId(kbId);
+        updateKb.setName(request.getName().trim());
+        updateKb.setDescription(request.getDescription());
+        updateKb.setVisibility(request.getVisibility());
+        updateKb.setTopK(request.getTopK());
+        updateKb.setScore(request.getScore());
         knowledgeBaseRepository.updateById(updateKb);
-        return KnowledgeBaseResponse.from(kb, documentInfoRepository.countByKbId(request.getKbId()));
+
+        KnowledgeBase kb = findById(kbId);
+        return KnowledgeBaseResponse.from(kb, documentInfoRepository.countByKbId(kbId));
     }
 
-    public KnowledgeBaseResponse activateDraft(Long kbId, Long memberId) {
-        KnowledgeBase kb = findById(kbId, memberId);
+    public KnowledgeBaseResponse activateDraft(Long kbId) {
+        KnowledgeBase kb = findById(kbId);
 
         if (KnowledgeBaseStatus.DRAFT.equals(kb.getStatus())) {
             KnowledgeBase updateKb = new KnowledgeBase();
             updateKb.setId(kb.getId());
             updateKb.setStatus(KnowledgeBaseStatus.ACTIVE);
             knowledgeBaseRepository.updateById(updateKb);
+
             kb.setStatus(KnowledgeBaseStatus.ACTIVE);
             log.info("knowledge base activated: kbId={}, name={}", kb.getId(), kb.getName());
         }
         return KnowledgeBaseResponse.from(kb, documentInfoRepository.countByKbId(kbId));
     }
 
-    public List<KnowledgeBaseResponse> list(Long memberId) {
-        List<KnowledgeBase> knowledgeBaseList = knowledgeBaseRepository.findByMemberId(memberId);
+    public List<KnowledgeBaseResponse> list(Long memberId, boolean isOwner, List<Long> teamMemberIds) {
+        List<KnowledgeBase> knowledgeBaseList = isOwner
+                ? this.listTeamKnowledgeBases(teamMemberIds)
+                : this.listVisibleKnowledgeBases(memberId, teamMemberIds);
+
+
         List<Long> kbIds = knowledgeBaseList.stream().map(KnowledgeBase::getId).toList();
         Map<Long, Long> kbCountMap = documentInfoRepository.countDocsGroupedByKbIds(kbIds);
-        return knowledgeBaseRepository.findByMemberId(memberId).stream()
-                .map(kb -> KnowledgeBaseResponse.from(kb, kbCountMap.getOrDefault(kb.getId(), 0L)))
+
+        List<Long> memberIds = knowledgeBaseList.stream().map(KnowledgeBase::getMemberId).distinct().toList();
+        Map<Long, String> memberNameMap = memberRepository.findByIds(memberIds).stream()
+                .collect(Collectors.toMap(ChatMember::getId, ChatMember::getUsername));
+
+        return knowledgeBaseList.stream()
+                .map(kb -> KnowledgeBaseResponse.from(kb,
+                        memberNameMap.get(kb.getMemberId()),
+                        kbCountMap.getOrDefault(kb.getId(), 0L)))
                 .toList();
     }
 
     public KnowledgeBaseResponse getKnowledgeBase(Long kbId, Long memberId) {
-        KnowledgeBase kb = findById(kbId, memberId);
-
+        KnowledgeBase kb = findById(kbId);
         syncBuildProgressIfNeeded(kb, memberId);
-        kb = findById(kbId, memberId);
+        kb = findById(kbId);
         return KnowledgeBaseResponse.from(kb, documentInfoRepository.countByKbId(kbId));
     }
 
-    public void deleteKnowledgeBase(Long kbId, Long memberId) {
-        KnowledgeBase kb = findById(kbId, memberId);
-
+    public void deleteKnowledgeBase(Long kbId) {
+        KnowledgeBase kb = findById(kbId);
         deleteKnowledgeBase(kb);
         log.info("knowledge base deleted: kbId={}, indexName={}", kbId, kb.getIndexName());
     }
 
-    /**
-     * 删除超过保留期的草稿知识库
-     */
-    public void cleanupExpiredDrafts(Long memberId) {
-        LocalDateTime cutoff = LocalDateTime.now().minusDays(DRAFT_RETENTION_DAYS);
-        List<KnowledgeBase> expired = knowledgeBaseRepository.findDraftsOlderThan(memberId, cutoff);
-        for (KnowledgeBase draft : expired) {
-            try {
-                deleteKnowledgeBase(draft);
-                log.info("expired draft knowledge base removed: kbId={}, memberId={}", draft.getId(), memberId);
-            } catch (Exception e) {
-                log.warn("failed to remove expired draft kb: kbId={}", draft.getId(), e);
-            }
-        }
+
+    public KnowledgeBase findById(Long kbId) {
+        return knowledgeBaseRepository.findById(kbId);
     }
 
-    public KnowledgeBase findById(Long kbId, Long memberId) {
-        KnowledgeBase kb = knowledgeBaseRepository.findById(kbId);
-        if (kb == null || !memberId.equals(kb.getMemberId()))
-            throw new BusinessException(ErrorCode.KB_NOT_FOUND);
-        return kb;
+    private List<KnowledgeBase> listTeamKnowledgeBases(List<Long> teamMemberIds) {
+        if (teamMemberIds == null || teamMemberIds.isEmpty())
+            return List.of();
+        return knowledgeBaseRepository.findByMemberIds(teamMemberIds);
+    }
+
+    /** MEMBER：自己所有 + 团队其他成员公开的知识库 */
+    private List<KnowledgeBase> listVisibleKnowledgeBases(Long memberId, List<Long> teamMemberIds) {
+        List<KnowledgeBase> knowledgeBases = knowledgeBaseRepository.findByMemberId(memberId);
+        if (teamMemberIds == null || teamMemberIds.isEmpty())
+            return knowledgeBases;
+
+        teamMemberIds.remove(memberId);
+        if (!teamMemberIds.isEmpty())
+            knowledgeBases.addAll(knowledgeBaseRepository.findPublicByMemberIds(teamMemberIds));
+
+        return knowledgeBases.stream()
+                .sorted(Comparator.comparing(KnowledgeBase::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
     }
 
     private void deleteKnowledgeBase(KnowledgeBase kb) {
@@ -152,8 +155,8 @@ public class KnowledgeBaseService {
                 log.warn("ES index deletion failed for kb: indexName={}", kb.getIndexName(), e);
             }
         }
-        documentInfoRepository.findByKbId(kb.getId())
-                .forEach(doc -> documentInfoRepository.deleteById(doc.getId()));
+        List<Long> ids = documentInfoRepository.findByKbId(kb.getId()).stream().map(DocumentInfo::getId).toList();
+        documentInfoRepository.deleteByIds(ids);
         knowledgeBaseRepository.deleteById(kb.getId());
     }
 

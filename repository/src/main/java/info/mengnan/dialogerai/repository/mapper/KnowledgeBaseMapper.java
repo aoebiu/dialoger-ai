@@ -19,6 +19,22 @@ public interface KnowledgeBaseMapper extends BaseMapper<KnowledgeBase> {
                 .orderByDesc(KnowledgeBase::getCreatedAt));
     }
 
+    /** OWNER：团队所有成员的全部知识库 */
+    default List<KnowledgeBase> findByMemberIds(List<Long> memberIds) {
+        return selectList(new LambdaQueryWrapper<KnowledgeBase>()
+                .in(KnowledgeBase::getMemberId, memberIds)
+                .eq(KnowledgeBase::getDeleted, 0)
+                .orderByDesc(KnowledgeBase::getCreatedAt));
+    }
+
+    default List<KnowledgeBase> findPublicByMemberIds(List<Long> memberIds) {
+        return selectList(new LambdaQueryWrapper<KnowledgeBase>()
+                .in(KnowledgeBase::getMemberId, memberIds)
+                .eq(KnowledgeBase::getVisibility, "public")
+                .eq(KnowledgeBase::getDeleted, 0)
+                .orderByDesc(KnowledgeBase::getCreatedAt));
+    }
+
     default List<KnowledgeBase> findActiveByMemberId(Long memberId) {
         return selectList(new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getMemberId, memberId)
@@ -33,13 +49,6 @@ public interface KnowledgeBaseMapper extends BaseMapper<KnowledgeBase> {
                 .eq(KnowledgeBase::getDeleted, 0)
                 .eq(KnowledgeBase::getStatus, KnowledgeBaseStatus.DRAFT)
                 .lt(KnowledgeBase::getCreatedAt, createdBefore));
-    }
-
-    default KnowledgeBase findByIdAndMemberId(Long id, Long memberId) {
-        return selectOne(new LambdaQueryWrapper<KnowledgeBase>()
-                .eq(KnowledgeBase::getId, id)
-                .eq(KnowledgeBase::getMemberId, memberId)
-                .eq(KnowledgeBase::getDeleted, 0));
     }
 
     default KnowledgeBase findByIndexName(String indexName) {
