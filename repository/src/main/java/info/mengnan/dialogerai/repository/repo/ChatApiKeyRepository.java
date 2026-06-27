@@ -33,6 +33,14 @@ public class ChatApiKeyRepository {
         mapper.updateById(entity);
     }
 
+    public void clearDefaultDirectChatByMemberId(Long memberId) {
+        mapper.clearDefaultDirectChatByMemberId(memberId);
+    }
+
+    public ChatApiKey findDefaultDirectChatByMemberId(Long memberId) {
+        return mapper.findDefaultDirectChatByMemberId(memberId);
+    }
+
     public void deleteById(Long id) {
         mapper.deleteById(id);
     }

@@ -14,6 +14,7 @@ public class ModelApiKeyResponse {
     private String maskedApiKey;
     private String param;
     private LocalDateTime createdAt;
+    private boolean defaultDirectChat;
 
     public static ModelApiKeyResponse from(ChatApiKey key) {
         ModelApiKeyResponse response = new ModelApiKeyResponse();
@@ -28,6 +29,7 @@ public class ModelApiKeyResponse {
     public static ModelApiKeyResponse fromMasked(ChatApiKey key) {
         ModelApiKeyResponse response = from(key);
         response.setMaskedApiKey(maskApiKey(key.getApiKey()));
+        response.setDefaultDirectChat(key.isDefaultChat());
         return response;
     }
 

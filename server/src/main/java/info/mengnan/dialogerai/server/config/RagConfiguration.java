@@ -105,7 +105,11 @@ public class RagConfiguration {
                                                  ModelConfigService modelConfigService,
                                                  DefaultModelConfig modelConfig,
                                                  PromptTemplateManager promptTemplateManager) {
-        return new DirectModelInvoker(modelFactory, modelConfigService::findModel, promptTemplateManager, modelConfig);
+        return new DirectModelInvoker(modelFactory,
+                modelConfigService::findModel,
+                modelConfigService::findDefaultDirectChatModelName,
+                promptTemplateManager,
+                modelConfig);
     }
 
 }

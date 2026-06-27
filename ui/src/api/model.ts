@@ -1,4 +1,4 @@
-import { $get, $post, $delete } from './request'
+import { $get, $post, $put, $delete } from './request'
 
 export interface ModelApiKeyItem {
   id: number
@@ -7,6 +7,7 @@ export interface ModelApiKeyItem {
   keyType: string
   maskedApiKey: string
   createdAt: string | null
+  defaultDirectChat: boolean
 }
 
 export function getModelKeyList() {
@@ -29,4 +30,12 @@ export function createModelKey(params: {
 
 export function deleteModelKey(id: number) {
   return $delete(`/model/${id}`)
+}
+
+export function setDefaultDirectChatModel(id: number) {
+  return $put<ModelApiKeyItem[]>(`/model/${id}/directChat`)
+}
+
+export function clearDefaultDirectChatModel(id: number) {
+  return $delete<ModelApiKeyItem[]>(`/model/${id}/directChat`)
 }

@@ -43,6 +43,8 @@ public enum ErrorCode {
     MODEL_KEY_NOT_FOUND("5001", "模型 API Key 不存在"),
     MODEL_PARAM_INVALID("5002", "缺少必要参数或参数格式不合法"),
     MODEL_KEY_DELETE_DENIED("5003", "无权删除该 API Key"),
+    MODEL_DEFAULT_INVALID("5004", "仅 chat 类型模型可设为默认对话模型"),
+    MODEL_DEFAULT_REQUIRED("5005", "当前组织未配置默认对话模型"),
 
     // 应用配置
     CONFIG_NOT_FOUND("7001", "配置不存在"),

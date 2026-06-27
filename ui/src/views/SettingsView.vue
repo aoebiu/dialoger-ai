@@ -627,7 +627,7 @@
           <div class="section-header-bar">
             <div class="section-header-info">
               <h1 class="page-title">模型配置</h1>
-              <p class="page-desc">配置第三方模型的 API Key，支持 OpenAI、Anthropic、DeepSeek 等模型提供商。</p>
+              <p class="page-desc">配置第三方模型的 API Key，支持 OpenAI、Anthropic、DeepSeek 等模型提供商。Owner 可将 chat 类型模型设为团队默认对话模型。</p>
             </div>
             <div class="section-header-actions">
               <button v-if="auth.isOwner" type="button" class="primary-action-btn" @click="showCreateModelModal = true">
@@ -662,6 +662,7 @@
                   <span>模型名称</span>
                   <span>提供商</span>
                   <span>类型</span>
+                  <span>默认对话</span>
                   <span>Key</span>
                   <span>创建时间</span>
                   <span>操作</span>
@@ -675,6 +676,31 @@
                     <span class="model-name">{{ item.modelName }}</span>
                     <span class="model-provider-tag" :class="providerClass(item.modelProvider)">{{ item.modelProvider }}</span>
                     <span class="model-type-tag" :class="keyTypeClass(item.keyType)">{{ keyTypeLabel(item.keyType) }}</span>
+                    <span class="model-default-cell">
+                      <button
+                        v-if="item.defaultDirectChat && auth.isOwner"
+                        type="button"
+                        class="default-toggle-btn"
+                        :disabled="settingDefaultModelId === item.id"
+                        @click="clearDefaultDirectChat(item)"
+                      >
+                        <span class="default-toggle-label is-default">
+                          {{ settingDefaultModelId === item.id ? '取消中…' : '默认' }}
+                        </span>
+                        <span class="default-toggle-label is-cancel">取消默认</span>
+                      </button>
+                      <span v-else-if="item.defaultDirectChat" class="default-chat-badge">默认</span>
+                      <button
+                        v-else-if="auth.isOwner && item.keyType === 'chat'"
+                        type="button"
+                        class="set-default-btn"
+                        :disabled="settingDefaultModelId === item.id"
+                        @click="setDefaultDirectChat(item)"
+                      >
+                        {{ settingDefaultModelId === item.id ? '设置中…' : '设为默认' }}
+                      </button>
+                      <span v-else class="model-default-empty">—</span>
+                    </span>
                     <span class="apikey-masked">{{ item.maskedApiKey }}</span>
                     <span class="apikey-meta">{{ formatDate(item.createdAt) }}</span>
                   </div>
@@ -878,7 +904,7 @@ import {
 import type { TeamMember, TeamOverview } from '@/api/team'
 import { getApiKeyList, createApiKey, disableApiKey, deleteApiKey } from '@/api/apikey'
 import type { ApiKeyListItem, CreateApiKeyResult } from '@/api/apikey'
-import { getModelKeyList, createModelKey, deleteModelKey } from '@/api/model'
+import { getModelKeyList, createModelKey, deleteModelKey, setDefaultDirectChatModel, clearDefaultDirectChatModel } from '@/api/model'
 import type { ModelApiKeyItem } from '@/api/model'
 import { getFunctionCallList, deleteFunctionCall } from '@/api/functioncall'
 import type { FunctionCallItem } from '@/api/functioncall'
@@ -975,6 +1001,7 @@ const newKeyResult = ref<CreateApiKeyResult | null>(null)
 
 // 模型配置相关
 const modelKeyList = ref<ModelApiKeyItem[]>([])
+const settingDefaultModelId = ref<number | null>(null)
 const showCreateModelModal = ref(false)
 const creatingModelKey = ref(false)
 const createModelError = ref('')
@@ -1536,6 +1563,42 @@ async function deleteModelKeyById(id: number) {
     modelKeyList.value = modelKeyList.value.filter((k) => k.id !== id)
   } catch (e: any) {
     toastError(e.message || '删除失败')
+  }
+}
+
+async function setDefaultDirectChat(item: ModelApiKeyItem) {
+  if (item.keyType !== 'chat' || item.defaultDirectChat)
+    return
+
+  settingDefaultModelId.value = item.id
+  try {
+    const res = await setDefaultDirectChatModel(item.id)
+    if (res.success && Array.isArray(res.data)) {
+      modelKeyList.value = res.data
+      toastSuccess('已设为默认对话模型')
+    }
+  } catch (e: unknown) {
+    toastError(e instanceof Error ? e.message : '设置失败')
+  } finally {
+    settingDefaultModelId.value = null
+  }
+}
+
+async function clearDefaultDirectChat(item: ModelApiKeyItem) {
+  if (!item.defaultDirectChat)
+    return
+
+  settingDefaultModelId.value = item.id
+  try {
+    const res = await clearDefaultDirectChatModel(item.id)
+    if (res.success && Array.isArray(res.data)) {
+      modelKeyList.value = res.data
+      toastSuccess('已取消默认对话模型')
+    }
+  } catch (e: unknown) {
+    toastError(e instanceof Error ? e.message : '取消失败')
+  } finally {
+    settingDefaultModelId.value = null
   }
 }
 
@@ -2728,7 +2791,7 @@ onMounted(() => {
 .model-list .list-header,
 .model-list .account-item {
   display: grid;
-  grid-template-columns: 1.5fr 80px 80px 1fr 140px 60px;
+  grid-template-columns: 1.5fr 80px 80px 100px 1fr 140px 100px;
   align-items: center;
   gap: 1rem;
   padding-left: 1.25rem;
@@ -2736,7 +2799,7 @@ onMounted(() => {
 }
 
 .model-list {
-  min-width: 680px;
+  min-width: 780px;
 }
 
 .model-list .list-header span:last-child {
@@ -2786,6 +2849,85 @@ onMounted(() => {
 .type-embedding { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; }
 .type-moderation { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
 .type-scoring { background: rgba(217, 119, 6, 0.1); color: #d97706; }
+
+.model-default-cell {
+  justify-self: start;
+}
+
+.default-toggle-btn {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease, border-radius 0.15s ease;
+  white-space: nowrap;
+}
+
+.default-toggle-btn .is-cancel {
+  display: none;
+}
+
+.default-toggle-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.35);
+  border-radius: 4px;
+}
+
+.default-toggle-btn:hover:not(:disabled) .is-default {
+  display: none;
+}
+
+.default-toggle-btn:hover:not(:disabled) .is-cancel {
+  display: inline;
+}
+
+.default-toggle-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.default-chat-badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+
+.set-default-btn {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #16a34a;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.set-default-btn:hover:not(:disabled) {
+  color: #15803d;
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.5);
+}
+
+.set-default-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.model-default-empty {
+  color: var(--color-text-tertiary);
+  font-size: 0.875rem;
+}
 
 /* 确认弹框 */
 .modal-confirm {

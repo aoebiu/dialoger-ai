@@ -9,6 +9,8 @@ import info.mengnan.dialogerai.rag.ChatService;
 import info.mengnan.dialogerai.server.handler.OpenAiStreamingResponseHandler;
 import info.mengnan.dialogerai.server.param.openai.OpenApiChatRequest;
 import info.mengnan.dialogerai.server.service.ImageProcessingService;
+import info.mengnan.dialogerai.server.service.MemberService;
+import info.mengnan.dialogerai.server.service.ModelConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -20,6 +22,7 @@ import java.util.UUID;
 
 import static info.mengnan.dialogerai.rag.config.DefaultModelConfig.DEFAULT_OPTION_ID;
 import static info.mengnan.dialogerai.rag.config.DefaultModelConfig.DEFAULT_SESSION;
+import static info.mengnan.dialogerai.server.param.ErrorCode.MODEL_DEFAULT_REQUIRED;
 
 /**
  * OpenAI 兼容的 API 控制器
@@ -34,6 +37,8 @@ public class OpenAiCompatibleController {
     private final ChatService chatService;
     private final ProjectApiKeyRepository projectApiKeyService;
     private final ImageProcessingService imageProcessingService;
+    private final MemberService memberService;
+    private final ModelConfigService modelConfigService;
 
     /**
      * OpenAI 兼容的聊天接口
@@ -61,6 +66,12 @@ public class OpenAiCompatibleController {
 
         ChatProjectApiKey projectApiKey = projectApiKeyService.findByApiKey(apiKey);
         chatRequest.setMemberId(projectApiKey.getMemberId());
+
+        Long ownerId = memberService.resolveResourceOwnerId(chatRequest.getMemberId());
+        String defaultModelName = modelConfigService.findDefaultDirectChatModelName(ownerId);
+        if (defaultModelName == null || defaultModelName.isBlank())
+            return Flux.error(new IllegalArgumentException(MODEL_DEFAULT_REQUIRED.getMessage()));
+
         try {
             return streamResponse(chatRequest, request.getModel());
         } catch (Exception e) {

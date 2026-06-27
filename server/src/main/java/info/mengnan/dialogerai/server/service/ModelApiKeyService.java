@@ -26,6 +26,28 @@ public class ModelApiKeyService {
                 .toList();
     }
 
+    public List<ModelApiKeyResponse> setDefaultDirectChatModel(Long ownerId, Long apiKeyId) {
+        chatApiKeyRepository.clearDefaultDirectChatByMemberId(ownerId);
+
+        ChatApiKey update = new ChatApiKey();
+        update.setId(apiKeyId);
+        update.setDefaultChat(true);
+        chatApiKeyRepository.updateById(update);
+
+        log.info("default direct chat model set: ownerId={}, apiKeyId={}", ownerId, apiKeyId);
+        return list(ownerId);
+    }
+
+    public List<ModelApiKeyResponse> clearDefaultDirectChatModel(Long ownerId, Long apiKeyId) {
+        ChatApiKey update = new ChatApiKey();
+        update.setId(apiKeyId);
+        update.setDefaultChat(false);
+        chatApiKeyRepository.updateById(update);
+
+        log.info("default direct chat model cleared: ownerId={}, apiKeyId={}", ownerId, apiKeyId);
+        return list(ownerId);
+    }
+
     public ModelApiKeyResponse create(Long memberId, String modelName, String modelProvider,
                                       String keyType, String apiKey) {
         ChatApiKey entity = new ChatApiKey();

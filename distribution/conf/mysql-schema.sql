@@ -56,6 +56,7 @@ CREATE TABLE `chat_api_key`
     `api_key`        varchar(500) NOT NULL COMMENT 'API Key',
     `model_name`     varchar(255) NOT NULL COMMENT '模型名称',
     `model_provider` varchar(255)          DEFAULT NULL COMMENT '模型提供商',
+    `default_chat` tinyint(1)   NOT NULL DEFAULT '0' COMMENT '是否为默认对话模型',
     `created_at`     timestamp    NULL     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at`     timestamp    NULL     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),

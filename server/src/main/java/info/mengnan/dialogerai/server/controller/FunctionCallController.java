@@ -79,6 +79,7 @@ public class FunctionCallController {
             return R.error(FC_PROMPT_EMPTY);
 
         Long memberId = StpUtil.getLoginIdAsLong();
+        Long ownerId = memberService.resolveResourceOwnerId(memberId);
         String taskId = asyncTaskService.createTask(memberId, AsyncTaskType.GENERATE_SCRIPT,
                 List.of("能力分析", "生成工具元数据"));
 
@@ -88,6 +89,7 @@ public class FunctionCallController {
                 asyncTaskService.updateStepRunning(taskId, 1);
                 Map<String, Object> phase1Variables = Map.of("prompt", userPrompt);
                 String analysisResult = directModelInvoker.directInvoke(
+                        ownerId,
                         "generateScript.capabilityAnalyzer",
                         "tool_capability_analysis", phase1Variables);
                 ToolCapabilityAnalysisResult capabilities = JSONUtil.toBean(analysisResult, ToolCapabilityAnalysisResult.class);
@@ -95,6 +97,7 @@ public class FunctionCallController {
                 asyncTaskService.updateStepRunning(taskId, 2);
                 String baseTemplate = promptTemplateManager.getTemplate("tool_metadata_generation").template();
                 String result = directModelInvoker.directInvokeRaw(
+                        ownerId,
                         "generateScript.toolMetadataGenerator",
                         generatePrompt(baseTemplate, capabilities, request.getPrompt()));
 
@@ -172,6 +175,7 @@ public class FunctionCallController {
             return R.error(FC_PARAM_INVALID);
 
         Long memberId = StpUtil.getLoginIdAsLong();
+        Long ownerId = memberService.resolveResourceOwnerId(memberId);
         if (!hasTeamAccess(memberId, tool.getMemberId()))
             return R.error(FC_ACCESS_DENIED);
 
@@ -188,6 +192,7 @@ public class FunctionCallController {
 
         try {
             String result = directModelInvoker.directInvoke(
+                    ownerId,
                     "generateScript.testCases",
                     "tool_case_generation",
                     testCaseVars);

@@ -42,6 +42,9 @@ public class ChatApiKey {
 
     private String baseUrl;
 
+    @TableField("default_chat")
+    private boolean defaultChat;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

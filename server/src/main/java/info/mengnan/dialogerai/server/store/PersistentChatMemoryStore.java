@@ -13,6 +13,7 @@ import info.mengnan.dialogerai.repository.entity.ChatSession;
 import info.mengnan.dialogerai.repository.repo.ChatMessageRepository;
 import info.mengnan.dialogerai.rag.injector.RagSourceStore;
 import info.mengnan.dialogerai.server.service.ChatSessionService;
+import info.mengnan.dialogerai.server.service.MemberService;
 import info.mengnan.dialogerai.tool.ToolExecutionStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -33,6 +34,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     private final RagSourceStore ragSourceStore;
     private final ToolExecutionStore toolExecutionStore;
     private final ChatSessionService chatSessionService;
+    private final MemberService memberService;
     private final DirectModelInvoker directModelInvoker;
 
     @Override
@@ -114,11 +116,11 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
 
         ChatSession chatSession = chatSessionService.findBySessionId(sessionId);
         if (DEFAULT_TITLE.equals(chatSession.getTitle())) {
-            titleGeneration(messages, chatSession.getChatSessionId());
+            titleGeneration(messages, chatSession);
         }
     }
 
-    private void titleGeneration(List<dev.langchain4j.data.message.ChatMessage> messages, String sessionId) {
+    private void titleGeneration(List<dev.langchain4j.data.message.ChatMessage> messages, ChatSession chatSession) {
         List<String> textList = new ArrayList<>();
         for (dev.langchain4j.data.message.ChatMessage msg : messages) {
             if (msg instanceof UserMessage m) {
@@ -130,9 +132,10 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         if (textList.size() < 2) return;
 
         Map<String, Object> params = Map.of("query", textList);
-        String title = directModelInvoker.directInvoke("conversations.titleGeneration",
+        Long ownerId = memberService.resolveResourceOwnerId(chatSession.getMemberId());
+        String title = directModelInvoker.directInvoke(ownerId, "conversations.titleGeneration",
                 "title_generation", params);
-        chatSessionService.updateChatTitle(sessionId, title);
+        chatSessionService.updateChatTitle(chatSession.getChatSessionId(), title);
     }
 
     private ChatMessageExtras buildUserExtras(UserMessage msg) {

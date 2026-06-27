@@ -59,6 +59,13 @@ public class ModelConfigService {
         }
     }
 
+    public String findDefaultDirectChatModelName(Long ownerId) {
+        if (ownerId == null)
+            return null;
+        ChatApiKey key = chatApiKeyService.findDefaultDirectChatByMemberId(ownerId);
+        return key != null ? key.getModelName() : null;
+    }
+
     public Map<ModelType, ModelConfig> loadModelConfigs(Long memberId) {
         return chatApiKeyService.findByMemberId(memberId).stream()
                 .collect(Collectors.toMap(

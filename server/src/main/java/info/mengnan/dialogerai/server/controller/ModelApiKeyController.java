@@ -1,6 +1,7 @@
 package info.mengnan.dialogerai.server.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
+import info.mengnan.dialogerai.common.param.ModelType;
 import info.mengnan.dialogerai.common.util.JSONUtil;
 import info.mengnan.dialogerai.repository.entity.ChatApiKey;
 import info.mengnan.dialogerai.server.param.R;
@@ -47,6 +48,42 @@ public class ModelApiKeyController {
             return R.error(MEMBER_OWNER_REQUIRED);
 
         return R.ok(modelApiKeyService.create(memberId, modelName, modelProvider, keyType, apiKey));
+    }
+
+    @PutMapping("/{id}/directChat")
+    public R setDefaultDirectChatModel(@PathVariable(name = "id") Long id) {
+        Long memberId = StpUtil.getLoginIdAsLong();
+        if (!memberService.isOwner(memberId))
+            return R.error(MEMBER_OWNER_REQUIRED);
+
+        ChatApiKey chatApiKey = modelApiKeyService.findById(id);
+        if (chatApiKey == null)
+            return R.error(MODEL_KEY_NOT_FOUND);
+        if (!ModelType.CHAT.n().equals(chatApiKey.getKeyType()))
+            return R.error(MODEL_DEFAULT_INVALID);
+
+        Long ownerId = memberService.resolveResourceOwnerId(memberId);
+        if (!ownerId.equals(chatApiKey.getMemberId()))
+            return R.error(MODEL_KEY_NOT_FOUND);
+        return R.ok(modelApiKeyService.setDefaultDirectChatModel(ownerId, id));
+    }
+
+    @DeleteMapping("/{id}/directChat")
+    public R clearDefaultDirectChatModel(@PathVariable(name = "id") Long id) {
+        Long memberId = StpUtil.getLoginIdAsLong();
+        if (!memberService.isOwner(memberId))
+            return R.error(MEMBER_OWNER_REQUIRED);
+
+        ChatApiKey chatApiKey = modelApiKeyService.findById(id);
+        if (chatApiKey == null)
+            return R.error(MODEL_KEY_NOT_FOUND);
+        if (!chatApiKey.isDefaultChat())
+            return R.error(MODEL_DEFAULT_INVALID);
+
+        Long ownerId = memberService.resolveResourceOwnerId(memberId);
+        if (!ownerId.equals(chatApiKey.getMemberId()))
+            return R.error(MODEL_KEY_NOT_FOUND);
+        return R.ok(modelApiKeyService.clearDefaultDirectChatModel(ownerId, id));
     }
 
     @DeleteMapping("/{id}")

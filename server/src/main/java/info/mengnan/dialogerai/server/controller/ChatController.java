@@ -11,6 +11,8 @@ import info.mengnan.dialogerai.server.core.DefaultAiServiceAssembler;
 import info.mengnan.dialogerai.server.service.ChatMessageService;
 import info.mengnan.dialogerai.server.service.ChatMessageToolExecutionService;
 import info.mengnan.dialogerai.server.service.ChatSessionService;
+import info.mengnan.dialogerai.server.service.MemberService;
+import info.mengnan.dialogerai.server.service.ModelConfigService;
 import info.mengnan.dialogerai.server.param.chat.ChatRequest;
 import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.server.handler.FluxStreamingResponseHandler;
@@ -29,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 import static info.mengnan.dialogerai.common.param.MessageRole.*;
+import static info.mengnan.dialogerai.server.param.ErrorCode.MODEL_DEFAULT_REQUIRED;
 import static info.mengnan.dialogerai.server.param.chat.ChatSessionResponse.DEFAULT_TITLE;
 
 
@@ -43,6 +46,8 @@ public class ChatController {
     private final ChatMessageService chatMessageService;
     private final ChatMessageToolExecutionService chatMessageToolExecutionService;
     private final ChatMessageRagSourceRepository ragSourceRepository;
+    private final MemberService memberService;
+    private final ModelConfigService modelConfigService;
 
     /**
      * 流式对话接口 - 使用 HTTP Streaming (application/x-ndjson)
@@ -58,6 +63,10 @@ public class ChatController {
         }
         Long memberId = StpUtil.getLoginIdAsLong();
         request.setMemberId(memberId);
+        Long ownerId = memberService.resolveResourceOwnerId(memberId);
+        String defaultModelName = modelConfigService.findDefaultDirectChatModelName(ownerId);
+        if (defaultModelName == null || defaultModelName.isBlank())
+            return Flux.error(new IllegalArgumentException(MODEL_DEFAULT_REQUIRED.getMessage()));
         return streamResponse(request);
     }
 

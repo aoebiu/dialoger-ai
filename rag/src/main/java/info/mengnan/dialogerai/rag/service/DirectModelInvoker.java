@@ -27,6 +27,7 @@ public class DirectModelInvoker {
 
     private final UniversalModelFactory modelFactory;
     private final SingleModelConfigProvider singleModelConfigProvider;
+    private final DefaultDirectChatModelNameProvider defaultDirectChatModelNameProvider;
     private final PromptTemplateManager promptTemplateManager;
     private final DefaultModelConfig defaultModelConfig;
 
@@ -37,18 +38,21 @@ public class DirectModelInvoker {
 
     public DirectModelInvoker(UniversalModelFactory modelFactory,
                               SingleModelConfigProvider singleModelConfigProvider,
+                              DefaultDirectChatModelNameProvider defaultDirectChatModelNameProvider,
                               PromptTemplateManager promptTemplateManager,
                               DefaultModelConfig defaultModelConfig) {
         this.modelFactory = modelFactory;
         this.singleModelConfigProvider = singleModelConfigProvider;
+        this.defaultDirectChatModelNameProvider = defaultDirectChatModelNameProvider;
         this.promptTemplateManager = promptTemplateManager;
         this.defaultModelConfig = defaultModelConfig;
     }
 
     /**
+     * @param ownerId 资源归属 ownerId，用于解析团队默认 direct chat 模型
      * @param invokeSource 业务来源标识，便于排查；为 null 时使用 {@code template:模板名}
      */
-    public String directInvoke(String invokeSource, String templateName, Map<String, Object> variables) {
+    public String directInvoke(Long ownerId, String invokeSource, String templateName, Map<String, Object> variables) {
         if (templateName == null) {
             log.error("No template name provided");
             throw new IllegalArgumentException("No template name provided");
@@ -57,21 +61,27 @@ public class DirectModelInvoker {
         String source = (invokeSource != null && !invokeSource.isBlank())
                 ? invokeSource
                 : ("template:" + templateName);
-        return directInvokeInternal(source, templateName, prompt.text());
+        return directInvokeInternal(ownerId, source, templateName, prompt.text());
     }
 
     /**
+     * @param ownerId 资源归属 ownerId，用于解析团队默认 direct chat 模型
      * @param invokeSource 业务来源标识，便于排查
      */
-    public String directInvokeRaw(String invokeSource, String promptText) {
+    public String directInvokeRaw(Long ownerId, String invokeSource, String promptText) {
         String source = (invokeSource != null && !invokeSource.isBlank()) ? invokeSource : "unknown";
-        return directInvokeInternal(source, null, promptText);
+        return directInvokeInternal(ownerId, source, null, promptText);
     }
 
-    private String directInvokeInternal(String invokeSource, String templateName, String promptText) {
+    private String directInvokeInternal(Long ownerId, String invokeSource, String templateName, String promptText) {
         ModelConfig modelConfig = null;
         try {
-            modelConfig = singleModelConfigProvider.findModel(null, defaultModelConfig.getModelName(), ModelType.CHAT);
+            String modelName = defaultDirectChatModelNameProvider.findDefaultDirectChatModelName(ownerId);
+            if (modelName == null || modelName.isBlank()) {
+                log.warn("No default direct chat model for ownerId={}, fallback to configured default", ownerId);
+                modelName = defaultModelConfig.getModelName();
+            }
+            modelConfig = singleModelConfigProvider.findModel(ownerId, modelName, ModelType.CHAT);
             if (modelConfig == null) {
                 throw new IllegalArgumentException("No default model configuration found");
             }
