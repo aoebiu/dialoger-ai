@@ -1,9 +1,6 @@
 package info.mengnan.dialogerai.rag.container.factory;
 
-import dev.langchain4j.community.model.dashscope.QwenChatModel;
-import dev.langchain4j.community.model.dashscope.QwenEmbeddingModel;
-import dev.langchain4j.community.model.dashscope.QwenStreamingChatModel;
-import dev.langchain4j.community.model.dashscope.WanxImageModel;
+import dev.langchain4j.community.model.dashscope.*;
 import info.mengnan.dialogerai.common.param.ModelType;
 import info.mengnan.dialogerai.rag.config.ModelConfig;
 import info.mengnan.dialogerai.rag.container.factory.applier.QwenParamApplier;
@@ -12,7 +9,7 @@ import info.mengnan.dialogerai.rag.container.factory.applier.QwenParamApplier;
  * 通义千问（DashScope）模型工厂。
  */
 public class QwenParamApplierModelFactory extends QwenParamApplier
-        implements ChatModelFactory, EmbeddingModelFactory, ImageModelFactory {
+        implements ChatModelFactory, EmbeddingModelFactory, ImageModelFactory, ScoringModelFactory {
 
     @Override
     public Object createModel(ModelConfig config, ModelType modelType) {
@@ -43,5 +40,10 @@ public class QwenParamApplierModelFactory extends QwenParamApplier
     @Override
     public WanxImageModel createImageModel(ModelConfig modelConfig) {
         return buildImageModel(modelConfig).build();
+    }
+
+    @Override
+    public QwenScoringModel createScoringModel(ModelConfig config) {
+        return buildScoringModel(config).build();
     }
 }

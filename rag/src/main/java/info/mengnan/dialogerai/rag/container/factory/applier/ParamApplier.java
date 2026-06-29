@@ -17,7 +17,7 @@ public abstract class ParamApplier {
 
     protected Object buildImageModel(ModelConfig config) { return null; }
 
-    protected String notSupported(ModelType type) {
+    protected final String notSupported(ModelType type) {
         return getClass().getSimpleName() + " does not support model type: " + type.n();
     }
 }
