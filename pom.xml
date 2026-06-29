@@ -27,9 +27,10 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <spring-boot.version>3.5.15</spring-boot.version>
-        <langchain4j.version>1.12.2</langchain4j.version>
-        <langchain4j.other.version>1.12.2-beta22</langchain4j.other.version>
+        <langchain4j.version>1.17.0</langchain4j.version>
+        <langchain4j.other.version>1.17.0-beta27</langchain4j.other.version>
         <mybatis-plus.version>3.5.7</mybatis-plus.version>
+        <mybatis.version>3.0.3</mybatis.version>
         <elasticsearch.version>8.17.4</elasticsearch.version>
         <lombok.version>1.18.34</lombok.version>
         <sa-token.version>1.39.0</sa-token.version>
@@ -88,7 +89,7 @@
             <dependency>
                 <groupId>org.mybatis</groupId>
                 <artifactId>mybatis-spring</artifactId>
-                <version>3.0.3</version>
+                <version>${mybatis.version}</version>
             </dependency>
 
             <!-- LangChain4j Core -->
