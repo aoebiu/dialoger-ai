@@ -30,7 +30,6 @@
         <langchain4j.version>1.17.0</langchain4j.version>
         <langchain4j.other.version>1.17.0-beta27</langchain4j.other.version>
         <mybatis-plus.version>3.5.7</mybatis-plus.version>
-        <mybatis.version>3.0.3</mybatis.version>
         <elasticsearch.version>8.17.4</elasticsearch.version>
         <lombok.version>1.18.34</lombok.version>
         <sa-token.version>1.39.0</sa-token.version>
@@ -83,13 +82,8 @@
             <!-- MyBatis-Plus -->
             <dependency>
                 <groupId>com.baomidou</groupId>
-                <artifactId>mybatis-plus-boot-starter</artifactId>
+                <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
                 <version>${mybatis-plus.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.mybatis</groupId>
-                <artifactId>mybatis-spring</artifactId>
-                <version>${mybatis.version}</version>
             </dependency>
 
             <!-- LangChain4j Core -->
