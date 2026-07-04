@@ -10,8 +10,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 import static info.mengnan.dialogerai.server.param.ErrorCode.*;
 
 @Slf4j
@@ -67,8 +65,8 @@ public class KnowledgeBaseController {
     public R list() {
         Long memberId = StpUtil.getLoginIdAsLong();
         boolean isOwner = memberService.isOwner(memberId);
-        List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
-        return R.ok(knowledgeBaseService.list(memberId, isOwner, teamMemberIds));
+        Long teamId = memberService.resolveTeamId(memberId);
+        return R.ok(knowledgeBaseService.list(memberId, isOwner, teamId));
     }
 
     @GetMapping("/{kbId}")
@@ -100,9 +98,8 @@ public class KnowledgeBaseController {
 
 
     private boolean hasPermission(Long memberId, Long kbOwnerMemberId) {
-        if (memberService.isOwner(memberId)) {
-            return memberService.resolveTeamMemberIds(memberId).contains(kbOwnerMemberId);
-        }
+        if (memberService.isOwner(memberId))
+            return memberService.isTeamMember(memberService.resolveTeamId(memberId), kbOwnerMemberId);
         return memberId.equals(kbOwnerMemberId);
     }
 }

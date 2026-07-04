@@ -12,8 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 import static info.mengnan.dialogerai.server.param.ErrorCode.*;
 
 /**
@@ -37,8 +35,8 @@ public class ConfigController {
     public R list() {
         Long memberId = StpUtil.getLoginIdAsLong();
         boolean isOwner = memberService.isOwner(memberId);
-        List<Long> teamIds = memberService.resolveTeamMemberIds(memberId);
-        return R.ok(bizConfigService.list(memberId, isOwner, teamIds));
+        Long teamId = memberService.resolveTeamId(memberId);
+        return R.ok(bizConfigService.list(memberId, isOwner, teamId));
     }
 
     /**
@@ -58,8 +56,8 @@ public class ConfigController {
             return R.ok(bizConfigService.toDetailResponse(row));
         }
 
-        List<Long> teamIds = memberService.resolveTeamMemberIds(memberId);
-        if (!teamIds.contains(targetMemberId))
+        Long teamId = memberService.resolveTeamId(memberId);
+        if (!memberService.isTeamMember(teamId, targetMemberId))
             return R.error(CONFIG_NOT_FOUND);
 
         BizConfig row = bizConfigService.findByMemberAndKey(targetMemberId, key);
@@ -109,8 +107,7 @@ public class ConfigController {
     private Long resolveEffectiveMemberId(Long currentMemberId, Long targetMemberId) {
         if (targetMemberId == null || !memberService.isOwner(currentMemberId))
             return currentMemberId;
-        List<Long> teamIds = memberService.resolveTeamMemberIds(currentMemberId);
-        if (!teamIds.contains(targetMemberId))
+        if (!memberService.isTeamMember(memberService.resolveTeamId(currentMemberId), targetMemberId))
             return null;
         return targetMemberId;
     }

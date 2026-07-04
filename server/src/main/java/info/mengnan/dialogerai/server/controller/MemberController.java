@@ -3,11 +3,13 @@ package info.mengnan.dialogerai.server.controller;
 import cn.dev33.satoken.stp.StpUtil;
 import info.mengnan.dialogerai.repository.entity.ChatMember;
 import info.mengnan.dialogerai.repository.entity.ChatMemberRelation;
+import info.mengnan.dialogerai.repository.entity.ChatTeam;
 import info.mengnan.dialogerai.repository.enums.MemberRole;
 import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.server.param.auth.*;
 import info.mengnan.dialogerai.server.service.MemberService;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import static info.mengnan.dialogerai.server.param.ErrorCode.*;
@@ -21,9 +23,8 @@ public class MemberController {
 
     @PostMapping("/register")
     public R register(@RequestBody RegisterRequest request) {
-        if (request.getUsername() == null || request.getUsername().isBlank()
-                || request.getPassword() == null || request.getPassword().isBlank())
-            return R.error(MEMBER_CREDENTIALS_EMPTY);
+        if (StringUtils.isEmpty(request.getUsername()) || StringUtils.isEmpty(request.getPassword()))
+            return R.error(MEMBER_NOT_FOUND);
 
         memberService.register(request);
         return R.ok();
@@ -31,9 +32,8 @@ public class MemberController {
 
     @PostMapping("/login")
     public R login(@RequestBody LoginRequest request) {
-        if (request.getUsername() == null || request.getUsername().isBlank()
-                || request.getPassword() == null || request.getPassword().isBlank())
-            return R.error(MEMBER_CREDENTIALS_EMPTY);
+        if (StringUtils.isEmpty(request.getUsername()) || StringUtils.isEmpty(request.getPassword()))
+            return R.error(MEMBER_NOT_FOUND);
 
         MemberResponse memberVO = memberService.authenticate(request.getUsername(), request.getPassword());
         StpUtil.login(memberVO.getId());
@@ -64,9 +64,9 @@ public class MemberController {
         if (member == null)
             return R.error(MEMBER_NOT_FOUND);
 
-        if (request.getPassword() != null && !request.getPassword().isBlank()) {
-            if (request.getOldPassword() == null || request.getOldPassword().isBlank())
-                return R.error(MEMBER_PASSWORD_EMPTY);
+        if (StringUtils.isNotEmpty(request.getPassword())) {
+            if (StringUtils.isEmpty(request.getOldPassword()))
+                return R.error(MEMBER_NOT_FOUND);
             if (!memberService.matchesPassword(request.getOldPassword(), member.getPassword()))
                 return R.error(MEMBER_OLD_PASSWORD_WRONG);
         }
@@ -81,27 +81,30 @@ public class MemberController {
         if (ownerId.equals(id))
             return R.error(MEMBER_CANNOT_DELETE_SELF);
 
-        R accessError = checkOwnerAccess(ownerId, id);
-        if (accessError != null)
-            return accessError;
+        R ownerError = requireOwner(ownerId, id);
+        if (ownerError != null)
+            return ownerError;
 
         memberService.deleteMember(id);
         return R.ok();
     }
 
-    private R checkOwnerAccess(Long ownerId, Long memberId) {
+    private R requireOwner(Long ownerId, Long memberId) {
         ChatMember owner = memberService.findById(ownerId);
         if (owner == null || owner.getRole() != MemberRole.OWNER)
-            return R.error(MEMBER_OWNER_REQUIRED);
+            return R.error(MEMBER_MANAGE_DENIED);
+
+        ChatTeam team = memberService.findTeamByOwnerId(ownerId);
+        if (team == null)
+            return R.error(MEMBER_MANAGE_DENIED);
         if (memberId == null)
             return null;
 
         ChatMemberRelation relation = memberService.findRelationByMemberId(memberId);
-        if (relation == null || !relation.getOwnerId().equals(ownerId))
+        if (relation == null || !team.getId().equals(relation.getTeamId()))
             return R.error(MEMBER_MANAGE_DENIED);
 
-        ChatMember member = memberService.findById(memberId);
-        if (member == null)
+        if (memberService.findById(memberId) == null)
             return R.error(MEMBER_NOT_FOUND);
         return null;
     }

@@ -12,4 +12,7 @@ public class CreateTeamMemberRequest {
     private String nickname;
 
     private String phone;
+
+    /** Controller 写入，非客户端提交 */
+    private Long ownerId;
 }

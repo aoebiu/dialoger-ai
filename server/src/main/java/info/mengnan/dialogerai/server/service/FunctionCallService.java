@@ -21,6 +21,7 @@ public class FunctionCallService {
 
     private final ToolDescriptionRepository toolDescriptionRepository;
     private final MemberRepository memberRepository;
+    private final MemberService memberService;
 
     public ChatToolDescription findById(Long id) {
         return toolDescriptionRepository.findById(id);
@@ -30,8 +31,9 @@ public class FunctionCallService {
         return toolDescriptionRepository.findByNameAndMemberId(name, memberId);
     }
 
-    public List<FunctionCallResponse> list(List<Long> teamMemberIds) {
-        if (teamMemberIds == null || teamMemberIds.isEmpty())
+    public List<FunctionCallResponse> list(Long teamId) {
+        List<Long> teamMemberIds = memberService.listTeamMemberIds(teamId);
+        if (teamMemberIds.isEmpty())
             return List.of();
 
         List<ChatToolDescription> tools = toolDescriptionRepository.findByMemberIds(teamMemberIds);

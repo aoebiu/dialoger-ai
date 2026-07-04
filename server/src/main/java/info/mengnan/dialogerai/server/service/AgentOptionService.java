@@ -91,16 +91,16 @@ public class AgentOptionService {
                         LinkedHashMap::new));
     }
 
-    public List<BindableKbOption> listBindableKnowledgeBases(Long memberId, boolean isOwner, List<Long> teamMemberIds) {
-        return knowledgeBaseService.listVisibleActive(memberId, isOwner, teamMemberIds).stream()
+    public List<BindableKbOption> listBindableKnowledgeBases(Long memberId, boolean isOwner, Long teamId) {
+        return knowledgeBaseService.listVisibleActive(memberId, isOwner, teamId).stream()
                 .map(BindableKbOption::new)
                 .toList();
     }
 
-    public AgentOptionBindablesResponse listBindables(Long memberId, Long ownerId, boolean isOwner, List<Long> teamMemberIds) {
+    public AgentOptionBindablesResponse listBindables(Long memberId, Long ownerId, boolean isOwner, Long teamId) {
         return new AgentOptionBindablesResponse(
                 listBindableModels(ownerId),
-                listBindableKnowledgeBases(memberId, isOwner, teamMemberIds));
+                listBindableKnowledgeBases(memberId, isOwner, teamId));
     }
 
     public List<Long> findBoundKbIds(Long agentOptionId) {

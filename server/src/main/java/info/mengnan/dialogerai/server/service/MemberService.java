@@ -2,10 +2,12 @@ package info.mengnan.dialogerai.server.service;
 
 import info.mengnan.dialogerai.repository.entity.ChatMember;
 import info.mengnan.dialogerai.repository.entity.ChatMemberRelation;
+import info.mengnan.dialogerai.repository.entity.ChatTeam;
 import info.mengnan.dialogerai.repository.enums.MemberRole;
 import info.mengnan.dialogerai.repository.enums.MemberStatus;
 import info.mengnan.dialogerai.repository.repo.MemberRelationRepository;
 import info.mengnan.dialogerai.repository.repo.MemberRepository;
+import info.mengnan.dialogerai.repository.repo.TeamRepository;
 import info.mengnan.dialogerai.server.exception.BusinessException;
 import info.mengnan.dialogerai.server.param.ErrorCode;
 import info.mengnan.dialogerai.server.param.auth.MemberResponse;
@@ -23,8 +25,8 @@ import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -33,9 +35,18 @@ public class MemberService {
 
     private final MemberRepository memberRepository;
     private final MemberRelationRepository memberRelationRepository;
+    private final TeamRepository teamRepository;
 
     public ChatMember findById(Long id) {
         return memberRepository.findById(id);
+    }
+
+    public ChatTeam findTeamById(Long teamId) {
+        return teamRepository.findById(teamId);
+    }
+
+    public ChatTeam findTeamByOwnerId(Long ownerId) {
+        return teamRepository.findByOwnerId(ownerId);
     }
 
     public ChatMemberRelation findRelationByMemberId(Long memberId) {
@@ -46,6 +57,7 @@ public class MemberService {
         return encryptPassword(rawPassword).equals(encryptedPassword);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void register(RegisterRequest request) {
         if (memberRepository.findByUsername(request.getUsername()) != null)
             throw new BusinessException(ErrorCode.MEMBER_USERNAME_EXISTS);
@@ -61,13 +73,18 @@ public class MemberService {
         member.setStatus(MemberStatus.ENABLED);
         member.setRole(MemberRole.OWNER);
         memberRepository.insert(member);
-        log.info("owner registered: memberId={}, username={}", member.getId(), request.getUsername());
+
+        ChatTeam team = new ChatTeam();
+        team.setOwnerId(member.getId());
+        teamRepository.insert(team);
+
+        log.info("owner registered: memberId={}, teamId={}, username={}", member.getId(), team.getId(), request.getUsername());
     }
 
     public MemberResponse authenticate(String username, String password) {
         ChatMember member = memberRepository.findByUsername(username);
         if (member == null || !encryptPassword(password).equals(member.getPassword()))
-            throw new BusinessException(ErrorCode.MEMBER_AUTH_FAILED);
+            throw new BusinessException(ErrorCode.MEMBER_NOT_FOUND);
 
         if (member.getStatus() != MemberStatus.ENABLED)
             throw new BusinessException(ErrorCode.MEMBER_DISABLED);
@@ -76,7 +93,7 @@ public class MemberService {
     }
 
     public MemberResponse toMemberResponse(ChatMember member) {
-        ChatMemberRelation relation = memberRelationRepository.findByMemberId(member.getId());
+        ChatTeam team = findTeamByMemberId(member.getId());
         MemberResponse response = new MemberResponse();
         response.setId(member.getId());
         response.setUsername(member.getUsername());
@@ -84,7 +101,8 @@ public class MemberService {
         response.setAvatar(member.getAvatar());
         response.setStatus(member.getStatus());
         response.setRole(member.getRole() != null ? member.getRole() : MemberRole.OWNER);
-        response.setOwnerId(relation != null ? relation.getOwnerId() : null);
+        response.setTeamId(team != null ? team.getId() : null);
+        response.setOwnerId(team != null ? team.getOwnerId() : null);
         return response;
     }
 
@@ -105,26 +123,41 @@ public class MemberService {
         memberRepository.updateById(updateMember);
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void deleteMember(Long memberId) {
         memberRepository.deleteById(memberId);
         memberRelationRepository.deleteByMemberId(memberId);
         log.info("team member removed: memberId={}", memberId);
     }
 
-    /** 解析资源归属 owner，模型与 Token 用量统一走此 ID */
-    public Long resolveResourceOwnerId(Long memberId) {
+    /** 解析当前用户所属团队 ID */
+    public Long resolveTeamId(Long memberId) {
         ChatMemberRelation relation = memberRelationRepository.findByMemberId(memberId);
-        return relation != null ? relation.getOwnerId() : memberId;
+        if (relation != null) return relation.getTeamId();
+
+        ChatTeam team = teamRepository.findByOwnerId(memberId);
+        return team != null ? team.getId() : null;
     }
 
-    /** 返回当前用户所在团队的全部 memberId（含 owner 本身） */
-    public List<Long> resolveTeamMemberIds(Long memberId) {
-        Long ownerId = resolveResourceOwnerId(memberId);
-        List<Long> ids = new ArrayList<>();
-        ids.add(ownerId);
-        ids.addAll(memberRelationRepository.listMemberIds(ownerId));
-        return ids;
+    /** 解析资源归属 Owner 的 memberId（API Key、模型配置等挂在 Owner 账号下） */
+    public Long resolveResourceOwnerId(Long memberId) {
+        ChatTeam team = findTeamByMemberId(memberId);
+        return team != null ? team.getOwnerId() : memberId;
+    }
+
+    public List<Long> listTeamMemberIds(Long teamId) {
+        ChatTeam team = teamRepository.findById(teamId);
+        if (team == null) return List.of();
+        return Stream.concat(Stream.of(team.getOwnerId()), memberRelationRepository.listMemberIds(teamId).stream()).toList();
+    }
+
+    public boolean isTeamMember(Long teamId, Long memberId) {
+        ChatTeam team = teamRepository.findById(teamId);
+        if (team == null) return false;
+        if (team.getOwnerId().equals(memberId)) return true;
+
+        ChatMemberRelation relation = memberRelationRepository.findByMemberId(memberId);
+        return relation != null && teamId.equals(relation.getTeamId());
     }
 
     public boolean isOwner(Long memberId) {
@@ -132,8 +165,13 @@ public class MemberService {
         return member != null && member.getRole() == MemberRole.OWNER;
     }
 
-    @Transactional
-    public TeamMemberResponse createTeamMember(Long ownerId, CreateTeamMemberRequest request) {
+    @Transactional(rollbackFor = Exception.class)
+    public TeamMemberResponse createTeamMember(CreateTeamMemberRequest request) {
+        Long ownerId = request.getOwnerId();
+        ChatTeam team = teamRepository.findByOwnerId(ownerId);
+        if (team == null)
+            throw new BusinessException(ErrorCode.MEMBER_MANAGE_DENIED);
+
         if (memberRepository.findByUsername(request.getUsername()) != null)
             throw new BusinessException(ErrorCode.MEMBER_USERNAME_EXISTS);
 
@@ -144,26 +182,26 @@ public class MemberService {
         memberRepository.insert(member);
 
         ChatMemberRelation relation = new ChatMemberRelation();
-        relation.setOwnerId(ownerId);
+        relation.setTeamId(team.getId());
         relation.setMemberId(member.getId());
         relation.setStatus(MemberStatus.ENABLED);
         memberRelationRepository.insert(relation);
 
-        log.info("team member created: ownerId={}, memberId={}, username={}",
-                ownerId, member.getId(), member.getUsername());
+        log.info("team member created: teamId={}, memberId={}, username={}", team.getId(), member.getId(), member.getUsername());
         return toTeamMemberResponse(member);
     }
 
-    public TeamOverviewResponse getOverview(Long memberId, ChatMember owner) {
+    public TeamOverviewResponse getOverview(Long memberId, ChatTeam team) {
+        ChatMember owner = memberRepository.findById(team.getOwnerId());
         TeamOverviewResponse overview = new TeamOverviewResponse();
         overview.setOwner(toTeamMemberResponse(owner));
-        overview.setMembers(listTeamMembers(owner.getId()));
+        overview.setMembers(listTeamMembers(team.getId()));
         overview.setCurrentUserId(memberId);
         return overview;
     }
 
-    public List<TeamMemberResponse> listTeamMembers(Long ownerId) {
-        List<Long> memberIds = memberRelationRepository.listMemberIds(ownerId);
+    public List<TeamMemberResponse> listTeamMembers(Long teamId) {
+        List<Long> memberIds = memberRelationRepository.listMemberIds(teamId);
         if (memberIds.isEmpty())
             return List.of();
         return memberRepository.findByIds(memberIds).stream()
@@ -178,7 +216,8 @@ public class MemberService {
         memberRepository.updateById(updateMember);
     }
 
-    public void updateTeamMember(Long memberId, UpdateTeamMemberRequest request) {
+    public void updateTeamMember(UpdateTeamMemberRequest request) {
+        Long memberId = request.getId();
         String phone = request.getPhone();
         if (StringUtils.hasText(phone)) {
             ChatMember existing = memberRepository.findByPhone(phone);
@@ -203,6 +242,12 @@ public class MemberService {
             }
         }
         log.info("team member updated: memberId={}", memberId);
+    }
+
+    private ChatTeam findTeamByMemberId(Long memberId) {
+        ChatMemberRelation relation = memberRelationRepository.findByMemberId(memberId);
+        if (relation != null) return teamRepository.findById(relation.getTeamId());
+        return teamRepository.findByOwnerId(memberId);
     }
 
     private ChatMember buildTeamMember(CreateTeamMemberRequest request) {

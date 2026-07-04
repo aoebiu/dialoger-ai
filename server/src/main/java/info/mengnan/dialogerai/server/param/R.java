@@ -48,6 +48,10 @@ public class R {
         return r;
     }
 
+    public static R ifError(ErrorCode errorCode) {
+        return errorCode != null ? error(errorCode) : ok();
+    }
+
     public static R unauthorized() {
         return error("unauthorized");
     }

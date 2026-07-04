@@ -34,6 +34,7 @@ public class KnowledgeBaseService {
     private final KnowledgeBaseBuildService knowledgeBaseBuildService;
     private final DocumentEmbedding documentEmbedding;
     private final MemberRepository memberRepository;
+    private final MemberService memberService;
 
     public KnowledgeBaseCreateResponse create(KnowledgeBaseRequest request) {
         Long memberId = request.getMemberId();
@@ -89,10 +90,11 @@ public class KnowledgeBaseService {
         return KnowledgeBaseResponse.from(kb, documentInfoRepository.countByKbId(kbId));
     }
 
-    public List<KnowledgeBaseResponse> list(Long memberId, boolean isOwner, List<Long> teamMemberIds) {
+    public List<KnowledgeBaseResponse> list(Long memberId, boolean isOwner, Long teamId) {
+        List<Long> teamMemberIds = memberService.listTeamMemberIds(teamId);
         List<KnowledgeBase> knowledgeBaseList = isOwner
-                ? this.listTeamKnowledgeBases(teamMemberIds)
-                : this.listVisibleKnowledgeBases(memberId, teamMemberIds);
+                ? listTeamKnowledgeBases(teamMemberIds)
+                : listVisibleKnowledgeBases(memberId, teamMemberIds);
 
 
         List<Long> kbIds = knowledgeBaseList.stream().map(KnowledgeBase::getId).toList();
@@ -128,10 +130,11 @@ public class KnowledgeBaseService {
     }
 
     /** 当前用户可见且已激活的知识库，供 Agent 绑定选择 */
-    public List<KnowledgeBase> listVisibleActive(Long memberId, boolean isOwner, List<Long> teamMemberIds) {
+    public List<KnowledgeBase> listVisibleActive(Long memberId, boolean isOwner, Long teamId) {
+        List<Long> teamMemberIds = new ArrayList<>(memberService.listTeamMemberIds(teamId));
         List<KnowledgeBase> knowledgeBases = isOwner
-                ? listTeamKnowledgeBases(new ArrayList<>(teamMemberIds))
-                : listVisibleKnowledgeBases(memberId, new ArrayList<>(teamMemberIds));
+                ? listTeamKnowledgeBases(teamMemberIds)
+                : listVisibleKnowledgeBases(memberId, teamMemberIds);
 
         return knowledgeBases.stream()
                 .filter(kb -> KnowledgeBaseStatus.ACTIVE.equals(kb.getStatus()))

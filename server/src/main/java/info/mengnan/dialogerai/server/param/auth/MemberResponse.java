@@ -14,6 +14,7 @@ public class MemberResponse {
     private String avatar;
     private MemberStatus status;
     private MemberRole role;
+    private Long teamId;
     private Long ownerId;
     private String token;
 }

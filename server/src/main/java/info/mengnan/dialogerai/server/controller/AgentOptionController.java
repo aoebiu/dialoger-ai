@@ -45,8 +45,8 @@ public class AgentOptionController {
         Long memberId = StpUtil.getLoginIdAsLong();
         Long ownerId = memberService.resolveResourceOwnerId(memberId);
         boolean isOwner = memberService.isOwner(memberId);
-        List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
-        return R.ok(agentOptionService.listBindables(memberId, ownerId, isOwner, teamMemberIds));
+        Long teamId = memberService.resolveTeamId(memberId);
+        return R.ok(agentOptionService.listBindables(memberId, ownerId, isOwner, teamId));
     }
 
     @PostMapping("/create")
@@ -148,8 +148,8 @@ public class AgentOptionController {
         if (kbIds == null || kbIds.isEmpty()) return true;
 
         boolean isOwner = memberService.isOwner(memberId);
-        List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
-        Set<Long> bindableKbIds = agentOptionService.listBindableKnowledgeBases(memberId, isOwner, teamMemberIds)
+        Long teamId = memberService.resolveTeamId(memberId);
+        Set<Long> bindableKbIds = agentOptionService.listBindableKnowledgeBases(memberId, isOwner, teamId)
                 .stream()
                 .map(BindableKbOption::getId)
                 .collect(Collectors.toSet());

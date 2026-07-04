@@ -5,23 +5,20 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import info.mengnan.dialogerai.repository.enums.MemberStatus;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
 @Data
-@TableName("chat_member_relation")
-public class ChatMemberRelation {
+@TableName("chat_team")
+public class ChatTeam {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private Long teamId;
+    private Long ownerId;
 
-    private Long memberId;
-
-    private MemberStatus status;
+    private String name;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

@@ -55,8 +55,8 @@ public class DocumentController {
             return R.error(ErrorCode.KB_NOT_FOUND);
 
         boolean isOwner = memberService.isOwner(memberId);
-        List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
-        if (!hasReadAccess(memberId, kb, isOwner, teamMemberIds))
+        Long teamId = memberService.resolveTeamId(memberId);
+        if (!hasReadAccess(memberId, kb, isOwner, teamId))
             return R.error(ErrorCode.KB_NOT_FOUND);
 
         if (!memberId.equals(kb.getMemberId()) && !isOwner)
@@ -81,8 +81,8 @@ public class DocumentController {
             return R.error(ErrorCode.KB_NOT_FOUND);
 
         boolean isOwner = memberService.isOwner(memberId);
-        List<Long> teamMemberIds = memberService.resolveTeamMemberIds(memberId);
-        if (!hasReadAccess(memberId, kb, isOwner, teamMemberIds))
+        Long teamId = memberService.resolveTeamId(memberId);
+        if (!hasReadAccess(memberId, kb, isOwner, teamId))
             return R.error(ErrorCode.KB_NOT_FOUND);
 
         List<DocumentInfoResponse> docs = documentInfoRepository.findByKbId(kbId)
@@ -157,10 +157,10 @@ public class DocumentController {
     /**
      * 读取访问校验：创建者始终可访问；OWNER 可访问团队任意 KB；MEMBER 可访问团队公开 KB。
      */
-    private boolean hasReadAccess(Long memberId, KnowledgeBase kb, boolean isOwner, List<Long> teamMemberIds) {
+    private boolean hasReadAccess(Long memberId, KnowledgeBase kb, boolean isOwner, Long teamId) {
         if (memberId.equals(kb.getMemberId()))
             return true;
-        if (!teamMemberIds.contains(kb.getMemberId()))
+        if (!memberService.isTeamMember(teamId, kb.getMemberId()))
             return false;
         return isOwner || "public".equals(kb.getVisibility());
     }

@@ -52,7 +52,7 @@ public class ModelApiKeyController {
 
         Long memberId = StpUtil.getLoginIdAsLong();
         if (!memberService.isOwner(memberId))
-            return R.error(MEMBER_OWNER_REQUIRED);
+            return R.error(MEMBER_MANAGE_DENIED);
 
         return R.ok(modelApiKeyService.create(memberId, modelName, modelProvider, keyType, apiKey));
     }
@@ -61,7 +61,7 @@ public class ModelApiKeyController {
     public R setDefaultDirectChatModel(@PathVariable(name = "id") Long id) {
         Long memberId = StpUtil.getLoginIdAsLong();
         if (!memberService.isOwner(memberId))
-            return R.error(MEMBER_OWNER_REQUIRED);
+            return R.error(MEMBER_MANAGE_DENIED);
 
         ChatApiKey chatApiKey = modelApiKeyService.findById(id);
         if (chatApiKey == null)
@@ -79,7 +79,7 @@ public class ModelApiKeyController {
     public R clearDefaultDirectChatModel(@PathVariable(name = "id") Long id) {
         Long memberId = StpUtil.getLoginIdAsLong();
         if (!memberService.isOwner(memberId))
-            return R.error(MEMBER_OWNER_REQUIRED);
+            return R.error(MEMBER_MANAGE_DENIED);
 
         ChatApiKey chatApiKey = modelApiKeyService.findById(id);
         if (chatApiKey == null)
@@ -97,12 +97,12 @@ public class ModelApiKeyController {
     public R deleteApiKey(@PathVariable(name = "id") Long id) {
         Long memberId = StpUtil.getLoginIdAsLong();
         if (!memberService.isOwner(memberId))
-            return R.error(MEMBER_OWNER_REQUIRED);
+            return R.error(MEMBER_MANAGE_DENIED);
 
         ChatApiKey chatApiKey = modelApiKeyService.findById(id);
         if (chatApiKey == null)
             return R.error(MODEL_KEY_NOT_FOUND);
-        if (!memberService.resolveTeamMemberIds(memberId).contains(chatApiKey.getMemberId()))
+        if (!memberService.isTeamMember(memberService.resolveTeamId(memberId), chatApiKey.getMemberId()))
             return R.error(MODEL_KEY_DELETE_DENIED);
 
         modelApiKeyService.delete(id);

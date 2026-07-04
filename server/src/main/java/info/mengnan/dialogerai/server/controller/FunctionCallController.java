@@ -43,7 +43,7 @@ public class FunctionCallController {
     @GetMapping("/list")
     public R list() {
         Long memberId = StpUtil.getLoginIdAsLong();
-        return R.ok(functionCallService.list(memberService.resolveTeamMemberIds(memberId)));
+        return R.ok(functionCallService.list(memberService.resolveTeamId(memberId)));
     }
 
     @GetMapping("/{id}")
@@ -223,7 +223,7 @@ public class FunctionCallController {
     }
 
     private boolean hasTeamAccess(Long memberId, Long toolOwnerMemberId) {
-        return memberService.resolveTeamMemberIds(memberId).contains(toolOwnerMemberId);
+        return memberService.isTeamMember(memberService.resolveTeamId(memberId), toolOwnerMemberId);
     }
 
     private boolean hasWriteAccess(Long memberId, Long toolOwnerMemberId) {

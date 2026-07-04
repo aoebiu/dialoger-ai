@@ -26,23 +26,40 @@ CREATE TABLE `chat_member`
   COLLATE = utf8mb4_0900_ai_ci COMMENT ='会员表';
 
 -- ----------------------------
+-- Table structure for chat_team
+-- ----------------------------
+DROP TABLE IF EXISTS `chat_team`;
+CREATE TABLE `chat_team`
+(
+    `id`         bigint(20) NOT NULL AUTO_INCREMENT COMMENT '团队ID',
+    `owner_id`   bigint(20) NOT NULL COMMENT '团队 Owner 的 member_id',
+    `name`       varchar(100)      DEFAULT NULL COMMENT '团队名称',
+    `created_at` timestamp  NULL     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` timestamp  NULL     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_owner_id` (`owner_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci COMMENT ='团队表';
+
+-- ----------------------------
 -- Table structure for chat_member_relation
 -- ----------------------------
 DROP TABLE IF EXISTS `chat_member_relation`;
 CREATE TABLE `chat_member_relation`
 (
     `id`         bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    `owner_id`   bigint(20) NOT NULL COMMENT '上级 Owner 的 member_id',
-    `member_id`  bigint(20) NOT NULL COMMENT '下级 Member 的 member_id',
+    `team_id`    bigint(20) NOT NULL COMMENT '所属团队ID',
+    `member_id`  bigint(20) NOT NULL COMMENT '团队成员 member_id',
     `status`     int(11)           DEFAULT '1' COMMENT '状态: 1-正常, 0-禁用',
     `created_at` timestamp  NULL     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` timestamp  NULL     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_member_id` (`member_id`),
-    KEY `idx_owner_id` (`owner_id`)
+    KEY `idx_team_id` (`team_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_0900_ai_ci COMMENT ='会员上下级关系表';
+  COLLATE = utf8mb4_0900_ai_ci COMMENT ='团队成员关系表';
 
 -- ----------------------------
 -- Table structure for chat_api_key

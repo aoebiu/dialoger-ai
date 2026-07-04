@@ -20,9 +20,11 @@ public class BizConfigService {
 
     private final BizConfigRepository bizConfigRepository;
     private final MemberRepository memberRepository;
+    private final MemberService memberService;
 
-    public List<AppConfigItemResponse> list(Long memberId, boolean isOwner, List<Long> teamMemberIds) {
-        if (teamMemberIds == null || teamMemberIds.isEmpty())
+    public List<AppConfigItemResponse> list(Long memberId, boolean isOwner, Long teamId) {
+        List<Long> teamMemberIds = memberService.listTeamMemberIds(teamId);
+        if (teamMemberIds.isEmpty())
             return List.of();
 
         List<BizConfig> configs = bizConfigRepository.findByMemberIds(teamMemberIds);

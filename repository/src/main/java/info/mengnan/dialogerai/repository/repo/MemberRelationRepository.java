@@ -19,14 +19,14 @@ public class MemberRelationRepository {
                 .eq(ChatMemberRelation::getMemberId, memberId));
     }
 
-    public List<ChatMemberRelation> findByOwnerId(Long ownerId) {
+    public List<ChatMemberRelation> findByTeamId(Long teamId) {
         return mapper.selectList(new LambdaQueryWrapper<ChatMemberRelation>()
-                .eq(ChatMemberRelation::getOwnerId, ownerId)
+                .eq(ChatMemberRelation::getTeamId, teamId)
                 .orderByDesc(ChatMemberRelation::getId));
     }
 
-    public List<Long> listMemberIds(Long ownerId) {
-        return findByOwnerId(ownerId).stream()
+    public List<Long> listMemberIds(Long teamId) {
+        return findByTeamId(teamId).stream()
                 .map(ChatMemberRelation::getMemberId)
                 .toList();
     }
