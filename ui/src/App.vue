@@ -32,5 +32,8 @@ watch(
     color: var(--color-text-primary);
     transition: background-color 0.3s ease, color 0.3s ease;
   }
-  .app { min-height: 100vh; }
+  .app {
+    height: 100vh;
+    overflow: hidden;
+  }
 </style>

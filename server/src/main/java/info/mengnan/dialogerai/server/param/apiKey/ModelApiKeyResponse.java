@@ -12,7 +12,6 @@ public class ModelApiKeyResponse {
     private String modelProvider;
     private String keyType;
     private String maskedApiKey;
-    private String param;
     private LocalDateTime createdAt;
     private boolean defaultDirectChat;
 

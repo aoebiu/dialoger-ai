@@ -1,7 +1,7 @@
 package info.mengnan.dialogerai.rag.container.assemble;
 
 import info.mengnan.dialogerai.common.param.ModelType;
-import info.mengnan.dialogerai.rag.config.ChatOptionConfig;
+import info.mengnan.dialogerai.rag.config.ChatAgentOptionConfig;
 import info.mengnan.dialogerai.rag.config.ModelConfig;
 import lombok.Data;
 
@@ -16,11 +16,11 @@ public class AssembledModels {
     private Integer maxMessages; // 最大消息数量
     private String transform;    // transform类型
     private Boolean contentAggregator; // 是否开启聚合排序
-    private String contentInjectorPrompt; // 提示词模板
     private Boolean inDB;
+    private String systemPrompt;
     private Map<ModelType, ModelConfig> configs;
 
-    public AssembledModels(ChatOptionConfig config, Map<ModelType, ModelConfig> modelConfigMap) {
+    public AssembledModels(ChatAgentOptionConfig config, Map<ModelType, ModelConfig> modelConfigMap) {
         if (config == null) {
             throw new IllegalArgumentException("Invalid chat option config");
         }
@@ -30,8 +30,8 @@ public class AssembledModels {
         this.setMaxMessages(config.getMaxMessages());
         this.setTransform(config.getTransform());
         this.setContentAggregator(config.getContentAggregator());
-        this.setContentInjectorPrompt(config.getContentInjectorPrompt());
         this.setInDB(config.getInDB());
+        this.setSystemPrompt(config.getSystemPrompt());
         this.setConfigs(modelConfigMap);
     }
 }

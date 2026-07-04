@@ -2,11 +2,11 @@ package info.mengnan.dialogerai.server.core;
 
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.service.tool.ToolExecutor;
-import info.mengnan.dialogerai.kb.core.KnowledgeBaseIndexResolver;
 import info.mengnan.dialogerai.kb.core.KnowledgeBaseIndexResolver.KbIndexRef;
 import info.mengnan.dialogerai.rag.container.assemble.AiServiceAssembler;
 import info.mengnan.dialogerai.rag.container.assemble.AssembledModels;
 import info.mengnan.dialogerai.rag.container.assemble.KbContext;
+import info.mengnan.dialogerai.server.service.AgentOptionService;
 import info.mengnan.dialogerai.server.service.RagAdapterService;
 import info.mengnan.dialogerai.server.service.ToolAdapterService;
 import info.mengnan.dialogerai.server.util.SpringContextHolder;
@@ -20,14 +20,14 @@ public class DefaultAiServiceAssembler extends AiServiceAssembler<DefaultAiServi
     private final Long optionId;
     private final RagAdapterService ragAdapterService;
     private final ToolAdapterService toolAdapterService;
-    private final KnowledgeBaseIndexResolver knowledgeBaseIndexResolver;
+    private final AgentOptionService agentOptionService;
 
     public DefaultAiServiceAssembler(Long memberId, Long optionId) {
         this.memberId = memberId;
         this.optionId = optionId;
         this.ragAdapterService = SpringContextHolder.getBean(RagAdapterService.class);
         this.toolAdapterService = SpringContextHolder.getBean(ToolAdapterService.class);
-        this.knowledgeBaseIndexResolver = SpringContextHolder.getBean(KnowledgeBaseIndexResolver.class);
+        this.agentOptionService = SpringContextHolder.getBean(AgentOptionService.class);
     }
 
     @Override
@@ -42,7 +42,8 @@ public class DefaultAiServiceAssembler extends AiServiceAssembler<DefaultAiServi
 
     @Override
     protected List<DefaultKbContext> kbContext() {
-        return knowledgeBaseIndexResolver.resolveActiveIndexes(memberId).stream()
+        List<KbIndexRef> refs = agentOptionService.resolveBoundKbIndexRefs(optionId);
+        return refs.stream()
                 .map(ref -> new DefaultKbContext(List.of(ref)))
                 .toList();
     }

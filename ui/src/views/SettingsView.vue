@@ -622,6 +622,83 @@
 
         </template>
 
+        <!-- Agent 配置 -->
+        <template v-else-if="currentSection === 'agentOption'">
+          <div class="section-header-bar">
+            <div class="section-header-info">
+              <h1 class="page-title">Agent 配置</h1>
+              <p class="page-desc">管理对话 Agent 的行为配置，包括 RAG、工具调用、消息窗口及各类模型绑定。对话页可选择已启用的配置。</p>
+            </div>
+            <div class="section-header-actions">
+              <button type="button" class="primary-action-btn" @click="router.push({ name: 'agentOptionCreate' })">
+                + 添加配置
+              </button>
+            </div>
+          </div>
+
+          <div class="section-body">
+            <div class="data-table-card">
+              <div class="data-table-toolbar">
+                <button
+                  type="button"
+                  class="refresh-btn"
+                  :disabled="loadingAgentOptionList"
+                  @click="loadAgentOptionList"
+                >
+                  {{ loadingAgentOptionList ? '刷新中…' : '刷新' }}
+                </button>
+              </div>
+              <div class="data-table-panel" :class="{ 'is-loading': loadingAgentOptionList }">
+                <div v-if="loadingAgentOptionList" class="data-table-loading-overlay" aria-busy="true" aria-live="polite">
+                  <div class="data-table-loading-backdrop" />
+                  <div class="data-table-loading-content">
+                    <span class="data-table-spinner" />
+                    <span class="data-table-loading-text">加载 Agent 配置…</span>
+                  </div>
+                </div>
+                <div v-else-if="agentOptionList.length > 0" class="table-scroll-x">
+                  <div class="account-list agent-option-list">
+                    <div class="list-header">
+                      <span>名称</span>
+                      <span>状态</span>
+                      <span>RAG</span>
+                      <span>工具</span>
+                      <span>消息窗口</span>
+                      <span>更新时间</span>
+                      <span>操作</span>
+                    </div>
+                    <div
+                      v-for="item in agentOptionList"
+                      :key="item.id"
+                      class="account-item agent-option-item"
+                    >
+                      <div class="account-info agent-option-info">
+                        <span class="agent-option-name">{{ item.name }}</span>
+                        <span class="agent-option-flag" :class="{ 'is-on': item.enabled }">
+                          {{ item.enabled ? '启用' : '禁用' }}
+                        </span>
+                        <span class="agent-option-flag" :class="{ 'is-on': item.rag }">
+                          {{ item.rag ? '开' : '关' }}
+                        </span>
+                        <span class="agent-option-flag" :class="{ 'is-on': item.tools }">
+                          {{ item.tools ? '开' : '关' }}
+                        </span>
+                        <span>{{ item.maxMessages ?? '—' }}</span>
+                        <span class="apikey-meta">{{ formatDate(item.updatedAt ?? null) }}</span>
+                      </div>
+                      <div class="upload-actions">
+                        <button type="button" class="edit-btn" @click="router.push({ name: 'agentOptionDetail', params: { id: item.id } })">编辑</button>
+                        <button type="button" class="delete-btn" @click="confirmDeleteAgentOption(item)">删除</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p v-else class="table-empty">暂无 Agent 配置，点击上方按钮添加</p>
+              </div>
+            </div>
+          </div>
+        </template>
+
         <!-- 模型配置 -->
         <template v-else-if="currentSection === 'modelConfig'">
           <div class="section-header-bar">
@@ -910,6 +987,11 @@ import { getFunctionCallList, deleteFunctionCall } from '@/api/functioncall'
 import type { FunctionCallItem } from '@/api/functioncall'
 import { getBizConfigList, getBizConfigItem, saveBizConfigItem, deleteBizConfigItem } from '@/api/config'
 import type { BizConfigItem } from '@/api/config'
+import {
+  getAgentOptionList,
+  deleteAgentOption,
+} from '@/api/agentOption'
+import type { AgentOptionItem } from '@/api/agentOption'
 import { toastError, toastSuccess } from '@/utils/toast'
 
 const route = useRoute()
@@ -919,6 +1001,7 @@ const auth = useAuthStore()
 const menuItems = [
   { id: 'documents', label: '文档知识库' },
   { id: 'functionCall', label: 'Function Call' },
+  { id: 'agentOption', label: 'Agent 配置' },
   { id: 'apikey', label: 'API Key 管理' },
   { id: 'bizConfig', label: '外部服务配置' },
   { id: 'modelConfig', label: '模型配置' },
@@ -934,6 +1017,8 @@ const loadingMemberList = ref(false)
 const loadingModelKeyList = ref(false)
 const loadingFunctionCallList = ref(false)
 const loadingBizConfigList = ref(false)
+const loadingAgentOptionList = ref(false)
+const agentOptionList = ref<AgentOptionItem[]>([])
 const bizConfigList = ref<BizConfigItem[]>([])
 const showBizConfigModal = ref(false)
 const bizConfigEditing = ref<BizConfigItem | null>(null)
@@ -1308,6 +1393,38 @@ async function deleteKeyById(id: number) {
     apiKeyList.value = apiKeyList.value.filter((k) => k.id !== id)
   } catch (e: any) {
     toastError(e.message || '删除失败')
+  }
+}
+
+async function loadAgentOptionList() {
+  loadingAgentOptionList.value = true
+  try {
+    const res = await getAgentOptionList()
+    if (res.success && Array.isArray(res.data)) {
+      agentOptionList.value = res.data
+    }
+  } catch {
+    // 忽略
+  } finally {
+    loadingAgentOptionList.value = false
+  }
+}
+
+function confirmDeleteAgentOption(item: AgentOptionItem) {
+  showConfirm(`确定删除 Agent 配置「${item.name}」吗？删除后不可恢复。`, () => deleteAgentOptionById(item.id))
+}
+
+async function deleteAgentOptionById(id: number) {
+  try {
+    const res = await deleteAgentOption(id)
+    if (res.success) {
+      agentOptionList.value = agentOptionList.value.filter((item) => item.id !== id)
+      toastSuccess('已删除')
+    } else {
+      toastError(res.message || '删除失败')
+    }
+  } catch (e: unknown) {
+    toastError(e instanceof Error ? e.message : '删除失败')
   }
 }
 
@@ -1702,6 +1819,7 @@ function keyTypeClass(keyType: string): string {
 function loadSectionData(section: string) {
   switch (section) {
     case 'documents': loadKnowledgeBaseList(); break
+    case 'agentOption': loadAgentOptionList(); break
     case 'apikey': loadApiKeyList(); break
     case 'bizConfig': loadBizConfigList(); break
     case 'modelConfig': loadModelKeyList(); break
@@ -3016,4 +3134,51 @@ onMounted(() => {
   font-family: inherit;
   line-height: 1.5;
 }
+
+/* Agent 配置 - grid 布局 */
+.agent-option-list .list-header,
+.agent-option-list .account-item {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) 70px 60px 60px 90px 140px 120px;
+  align-items: center;
+  gap: 0.75rem;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+.agent-option-list {
+  min-width: 720px;
+}
+
+.agent-option-list .list-header span:last-child {
+  text-align: center;
+}
+
+.agent-option-info {
+  display: contents;
+}
+
+.agent-option-name {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-option-flag {
+  justify-self: start;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(108, 117, 125, 0.1);
+  color: #6c757d;
+}
+
+.agent-option-flag.is-on {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+
 </style>

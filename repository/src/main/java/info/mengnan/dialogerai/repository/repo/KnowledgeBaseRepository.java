@@ -50,6 +50,10 @@ public class KnowledgeBaseRepository {
         return mapper.findByIndexName(indexName);
     }
 
+    public List<KnowledgeBase> findByIds(List<Long> ids) {
+        return mapper.findByIds(ids);
+    }
+
     public void deleteById(Long id) {
         KnowledgeBase entity = new KnowledgeBase();
         entity.setId(id);

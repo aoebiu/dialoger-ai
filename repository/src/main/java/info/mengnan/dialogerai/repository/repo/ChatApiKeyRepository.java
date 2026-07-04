@@ -41,6 +41,10 @@ public class ChatApiKeyRepository {
         return mapper.findDefaultDirectChatByMemberId(memberId);
     }
 
+    public ChatApiKey findByMemberIdAndKeyTypeAndModelName(Long memberId, String keyType, String modelName) {
+        return mapper.findByMemberIdAndKeyTypeAndModelName(memberId, keyType, modelName);
+    }
+
     public void deleteById(Long id) {
         mapper.deleteById(id);
     }

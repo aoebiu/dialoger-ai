@@ -79,7 +79,7 @@ public class DirectModelInvoker {
             String modelName = defaultDirectChatModelNameProvider.findDefaultDirectChatModelName(ownerId);
             if (modelName == null || modelName.isBlank()) {
                 log.warn("No default direct chat model for ownerId={}, fallback to configured default", ownerId);
-                modelName = defaultModelConfig.getModelName();
+                return null;
             }
             modelConfig = singleModelConfigProvider.findModel(ownerId, modelName, ModelType.CHAT);
             if (modelConfig == null) {

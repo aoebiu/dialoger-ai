@@ -49,6 +49,13 @@ public enum ErrorCode {
     // 应用配置
     CONFIG_NOT_FOUND("7001", "配置不存在"),
 
+    // Agent 配置
+    AGENT_OPTION_NOT_FOUND("8001", "Agent 配置不存在"),
+    AGENT_OPTION_WRITE_DENIED("8002", "无权操作该 Agent 配置"),
+    AGENT_OPTION_NAME_EMPTY("8003", "Agent 配置名称不能为空"),
+    AGENT_OPTION_MODEL_INVALID("8004", "绑定的模型不存在或不属于当前组织"),
+    AGENT_OPTION_KB_INVALID("8005", "绑定的知识库不存在或无权访问"),
+
     // Function Call
     FC_PARAM_INVALID("6001", "工具不存在或参数不合法"),
     FC_ACCESS_DENIED("6002", "无权访问该工具"),

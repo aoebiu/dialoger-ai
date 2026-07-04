@@ -83,6 +83,7 @@ public class ChatService {
                 .configureChatModel(configs.get(CHAT))
                 .configureModerationModel(configs.get(MODERATION))
                 .configureTools(assembledModels.getTools(), aiComponents.toolMap(), sessionId)
+                .configureSystemPrompt(assembledModels)
                 .chatMemoryProvider(assembledModels)
                 .build();
         try {
@@ -192,6 +193,16 @@ public class ChatService {
                     ? new DisabledModerationModel()
                     : modelFactory.createModerationModel(moderationConfig);
             aiServices.moderationModel(model);
+            return this;
+        }
+
+        private AssistantUniqueBuilder configureSystemPrompt(AssembledModels assembledModels) {
+            String systemPrompt = assembledModels.getSystemPrompt();
+            if (systemPrompt == null || systemPrompt.isBlank()) {
+                return this;
+            }
+            String prompt = systemPrompt.trim();
+            aiServices.systemMessageTransformer(current -> prompt);
             return this;
         }
 

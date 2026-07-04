@@ -29,7 +29,7 @@ import static info.mengnan.dialogerai.common.param.MessageRole.USER;
  * 使用 ChatModel 对历史对话进行总结压缩
  */
 @Slf4j
-@Component
+// @Component
 public class ChatHistoryCompressing {
 
     private final PromptTemplate promptTemplate;

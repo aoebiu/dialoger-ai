@@ -1,10 +1,11 @@
 package info.mengnan.dialogerai.server.service;
 
+import info.mengnan.dialogerai.kb.core.KnowledgeBaseIndexResolver.KbIndexRef;
+import info.mengnan.dialogerai.repository.entity.ChatMember;
 import info.mengnan.dialogerai.repository.entity.DocumentInfo;
 import info.mengnan.dialogerai.repository.entity.KnowledgeBase;
 import info.mengnan.dialogerai.repository.enums.KnowledgeBaseStatus;
 import info.mengnan.dialogerai.repository.enums.DocumentStatus;
-import info.mengnan.dialogerai.repository.entity.ChatMember;
 import info.mengnan.dialogerai.repository.repo.DocumentInfoRepository;
 import info.mengnan.dialogerai.repository.repo.KnowledgeBaseRepository;
 import info.mengnan.dialogerai.repository.repo.MemberRepository;
@@ -124,6 +125,35 @@ public class KnowledgeBaseService {
 
     public KnowledgeBase findById(Long kbId) {
         return knowledgeBaseRepository.findById(kbId);
+    }
+
+    /** 当前用户可见且已激活的知识库，供 Agent 绑定选择 */
+    public List<KnowledgeBase> listVisibleActive(Long memberId, boolean isOwner, List<Long> teamMemberIds) {
+        List<KnowledgeBase> knowledgeBases = isOwner
+                ? listTeamKnowledgeBases(new ArrayList<>(teamMemberIds))
+                : listVisibleKnowledgeBases(memberId, new ArrayList<>(teamMemberIds));
+
+        return knowledgeBases.stream()
+                .filter(kb -> KnowledgeBaseStatus.ACTIVE.equals(kb.getStatus()))
+                .toList();
+    }
+
+    /** 按绑定顺序解析已激活知识库的 RAG 索引引用 */
+    public List<KbIndexRef> resolveActiveKbIndexRefs(List<Long> kbIds) {
+        if (kbIds == null || kbIds.isEmpty())
+            return List.of();
+
+        Map<Long, KnowledgeBase> kbMap = knowledgeBaseRepository.findByIds(kbIds).stream()
+                .collect(Collectors.toMap(KnowledgeBase::getId, kb -> kb));
+
+        List<KbIndexRef> refs = new ArrayList<>();
+        for (Long kbId : kbIds) {
+            KnowledgeBase kb = kbMap.get(kbId);
+            if (kb == null || !KnowledgeBaseStatus.ACTIVE.equals(kb.getStatus()))
+                continue;
+            refs.add(new KbIndexRef(kb.getIndexName(), kb.getName(), kb.getTopK(), kb.getScore()));
+        }
+        return refs;
     }
 
     private List<KnowledgeBase> listTeamKnowledgeBases(List<Long> teamMemberIds) {

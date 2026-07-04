@@ -56,6 +56,7 @@ CREATE TABLE `chat_api_key`
     `api_key`        varchar(500) NOT NULL COMMENT 'API Key',
     `model_name`     varchar(255) NOT NULL COMMENT '模型名称',
     `model_provider` varchar(255)          DEFAULT NULL COMMENT '模型提供商',
+    `base_url`       varchar(500)          DEFAULT NULL COMMENT 'API Base URL',
     `default_chat` tinyint(1)   NOT NULL DEFAULT '0' COMMENT '是否为默认对话模型',
     `created_at`     timestamp    NULL     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at`     timestamp    NULL     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -95,23 +96,53 @@ CREATE TABLE `chat_option`
   COLLATE = utf8mb4_0900_ai_ci COMMENT ='聊天配置表';
 
 -- ----------------------------
--- Table structure for chat_option_api_key_rel
+-- Table structure for chat_agent_option_api_key_rel
 -- ----------------------------
-DROP TABLE IF EXISTS `chat_option_api_key_rel`;
-CREATE TABLE `chat_option_api_key_rel`
+DROP TABLE IF EXISTS `chat_agent_option_api_key_rel`;
+CREATE TABLE `chat_agent_option_api_key_rel`
 (
-    `id`              bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    `chat_option_id`  bigint(20) NOT NULL COMMENT '聊天配置ID',
-    `chat_api_key_id` bigint(20) NOT NULL COMMENT 'API Key配置ID',
-    `created_at`      timestamp  NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `updated_at`      timestamp  NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `id`                    bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `chat_agent_option_id`  bigint(20) NOT NULL COMMENT 'Agent 配置 ID',
+    `chat_api_key_id`       bigint(20) NOT NULL COMMENT 'API Key配置ID',
+    `params`                json                DEFAULT NULL COMMENT 'Agent 级模型调参 JSON',
+    `created_at`            timestamp  NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at`            timestamp  NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_option_key` (`chat_option_id`, `chat_api_key_id`),
-    KEY `idx_chat_option_id` (`chat_option_id`),
+    UNIQUE KEY `uk_agent_option_key` (`chat_agent_option_id`, `chat_api_key_id`),
+    KEY `idx_chat_agent_option_id` (`chat_agent_option_id`),
     KEY `idx_chat_api_key_id` (`chat_api_key_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_0900_ai_ci COMMENT ='聊天配置与API Key关联表';
+  COLLATE = utf8mb4_0900_ai_ci COMMENT ='Agent 配置与 API Key 关联表';
+
+-- ----------------------------
+-- Table structure for chat_agent_option
+-- ----------------------------
+DROP TABLE IF EXISTS `chat_agent_option`;
+CREATE TABLE `chat_agent_option`
+(
+    `id`                      bigint(20)   NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `member_id`               bigint(20)   NOT NULL DEFAULT 0 COMMENT '指定用户配置',
+    `name`                    varchar(255) NOT NULL COMMENT '配置名称',
+    `rag`                     tinyint(1)        DEFAULT '0' COMMENT '是否启用 RAG',
+    `tools`                   tinyint(1)        DEFAULT '0' COMMENT '是否启用工具',
+    `max_messages`            int(11)           DEFAULT '10' COMMENT '最大消息窗口数',
+    `enabled`                 tinyint(1)        DEFAULT '1' COMMENT '是否启用',
+    `transform`               varchar(100)      DEFAULT NULL COMMENT 'Query Transformer 类型',
+    `content_injector_prompt` text COMMENT 'Content Injector 提示词模板',
+    `system_prompt`           text COMMENT '系统提示词',
+    `content_aggregator`      tinyint(1)        DEFAULT '0' COMMENT 'Content Aggregator 类型',
+    `in_DB`                   tinyint(1)        DEFAULT '1' COMMENT '是否入库',
+    `remark`                  text COMMENT '备注',
+    `kb_ids`                  json              DEFAULT NULL COMMENT '绑定的知识库 ID 列表',
+    `created_at`              timestamp    NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at`              timestamp    NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_enabled` (`enabled`),
+    KEY `idx_member_id` (`member_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci COMMENT ='Agent 配置表';
 
 -- ----------------------------
 -- Table structure for chat_project_api_key

@@ -37,4 +37,12 @@ public interface ChatApiKeyMapper extends BaseMapper<ChatApiKey> {
                 .eq(ChatApiKey::isDefaultChat, true)
                 .last("LIMIT 1"));
     }
+
+    default ChatApiKey findByMemberIdAndKeyTypeAndModelName(Long memberId, String keyType, String modelName) {
+        return selectOne(new LambdaQueryWrapper<ChatApiKey>()
+                .eq(ChatApiKey::getMemberId, memberId)
+                .eq(ChatApiKey::getKeyType, keyType)
+                .eq(ChatApiKey::getModelName, modelName)
+                .last("LIMIT 1"));
+    }
 }

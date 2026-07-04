@@ -1,5 +1,6 @@
 package info.mengnan.dialogerai.rag.container.factory;
 
+import info.mengnan.dialogerai.common.classpath.ClasspathScanner;
 import info.mengnan.dialogerai.common.param.ModelType;
 import info.mengnan.dialogerai.rag.config.ModelConfig;
 import lombok.extern.slf4j.Slf4j;
@@ -7,11 +8,9 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
-import java.net.JarURLConnection;
-import java.net.URL;
-import java.util.*;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
 
 /**
  * 通用模型工厂实现
@@ -33,68 +32,13 @@ public class CapableModelFactory implements UniversalModelFactory {
     }
 
     private void loadMappings() {
-        try {
-            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-            Enumeration<URL> allResources = classLoader.getResources(MAPPING_LOCATION);
-
-            while (allResources.hasMoreElements()) {
-                URL dirUrl = allResources.nextElement();
-                loadFromDirectory(dirUrl, classLoader);
+        ClasspathScanner.forEachResource(MAPPING_LOCATION, ".properties", (entryName, inputStream) -> {
+            try {
+                loadSingleMapping(inputStream, entryName);
+            } catch (IOException ex) {
+                log.warn("Failed to load mapping file: {}", entryName, ex);
             }
-        } catch (IOException e) {
-            log.error("Failed to load model mapping configurations", e);
-        }
-    }
-
-    private void loadFromDirectory(URL dirUrl, ClassLoader classLoader) {
-        String protocol = dirUrl.getProtocol();
-
-        if ("file".equals(protocol)) {
-            loadFromFileSystem(dirUrl);
-        } else if ("jar".equals(protocol)) {
-            loadFromJar(dirUrl, classLoader);
-        }
-    }
-
-    private void loadFromFileSystem(URL dirUrl) {
-        java.io.File dir = new java.io.File(dirUrl.getPath());
-        if (dir.isDirectory()) {
-            java.io.File[] files = dir.listFiles((d, name) -> name.endsWith(".properties"));
-            if (files != null) {
-                for (java.io.File file : files) {
-                    try (InputStream is = file.toURI().toURL().openStream()) {
-                        loadSingleMapping(is, file.getName());
-                    } catch (IOException e) {
-                        log.warn("Failed to load mapping file: {}", file.getName(), e);
-                    }
-                }
-            }
-        }
-    }
-
-    private void loadFromJar(URL dirUrl, ClassLoader classLoader) {
-        try (JarFile jar = openJarFile(dirUrl)) {
-            Enumeration<JarEntry> entries = jar.entries();
-            while (entries.hasMoreElements()) {
-                JarEntry entry = entries.nextElement();
-                String name = entry.getName();
-                if (name.startsWith(MAPPING_LOCATION) && name.endsWith(".properties") && !entry.isDirectory()) {
-                    try (InputStream is = classLoader.getResourceAsStream(name)) {
-                        if (is != null) {
-                            loadSingleMapping(is, name);
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to load mappings from JAR: {}", dirUrl, e);
-        }
-    }
-
-    private JarFile openJarFile(URL jarUrl) throws IOException {
-        JarURLConnection connection = (JarURLConnection) jarUrl.openConnection();
-        connection.setUseCaches(false);
-        return connection.getJarFile();
+        });
     }
 
     private void loadSingleMapping(InputStream is, String source) throws IOException {

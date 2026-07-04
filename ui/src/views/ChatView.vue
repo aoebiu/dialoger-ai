@@ -1,157 +1,236 @@
 <template>
   <div class="chat-page">
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <h1 class="title">Dialoger AI</h1>
-        <button type="button" class="new-chat-btn" @click="handleNewChat">
-          {{ creating ? '创建中…' : '+ 新建对话' }}
-        </button>
-      </div>
-      <nav class="conversation-list">
-        <div v-for="key in GROUP_KEYS" :key="key">
-          <template v-if="groupedItems(key).length > 0">
-            <div class="conv-group-label">{{ GROUP_LABELS[key] }}</div>
-            <div
-              v-for="c in groupedItems(key)"
-              :key="c.id"
-              class="conversation-item"
-              :class="{ active: conv.currentId === c.id }"
-              @click="handleSelectConversation(c.id)"
-            >
-              <span class="conversation-title">{{ c.title }}</span>
-              <button
-                type="button"
-                class="conversation-delete-btn"
-                title="删除对话"
-                @click.stop="handleDeleteConversation(c.id)"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-              </button>
-            </div>
-          </template>
+    <!-- 顶栏 -->
+    <header class="top-nav">
+      <div class="top-nav-left">
+        <div class="brand">
+          <span class="brand-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </span>
+          <span class="brand-name">Dialoger AI</span>
         </div>
-        <p v-if="conv.conversations.length === 0" class="no-conversations">
-          暂无对话，点击上方「新建对话」开始
-        </p>
-      </nav>
-      <div class="sidebar-footer">
+        <template v-if="currentTitle">
+          <span class="nav-sep">/</span>
+          <span class="nav-title">{{ currentTitle }}</span>
+        </template>
+      </div>
+      <div class="top-nav-right">
+        <div v-if="enabledAgentOptions.length > 0" class="agent-picker">
+          <select
+            id="agent-option-select"
+            v-model.number="selectedAgentOptionId"
+            class="agent-select"
+            :disabled="streaming"
+          >
+            <option v-for="opt in enabledAgentOptions" :key="opt.id" :value="opt.id">
+              {{ opt.name }}
+            </option>
+          </select>
+        </div>
         <button
           type="button"
-          class="theme-toggle"
+          class="nav-icon-btn"
           :title="themeTooltip"
           @click="theme.toggleTheme()"
         >
-          {{ theme.resolvedTheme === 'dark' ? '🌙' : '☀️' }}
+          <svg v-if="theme.resolvedTheme === 'dark'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
         </button>
-        <button
-          type="button"
-          class="settings-btn"
-          title="后台配置"
-          @click="goToSettings"
-        >
-          ⚙️
+        <button type="button" class="nav-icon-btn" title="后台配置" @click="goToSettings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
-        <span class="user">{{ auth.user?.nickname || auth.user?.username }}</span>
-        <button type="button" class="logout" @click="handleLogout">退出</button>
-      </div>
-    </aside>
-    <main class="main">
-      <header v-if="conv.currentId" class="chat-header">
-        <span class="chat-header-title">{{ currentTitle }}</span>
-      </header>
-      <div v-if="!conv.currentId" class="empty-state">
-        选择左侧一个对话，或点击「新建对话」开始与 AI 聊天
-      </div>
-      <template v-else>
-        <div v-if="loadingHistory" class="empty">
-          加载对话记录中…
+        <div class="user-chip">
+          <span class="user-avatar">{{ userInitial }}</span>
+          <span class="user-name">{{ auth.user?.nickname || auth.user?.username }}</span>
         </div>
-        <div v-else-if="conv.currentMessages.length === 0" class="empty">
-          发送一条消息开始与 AI 对话
+        <button type="button" class="nav-text-btn" @click="handleLogout">退出</button>
+      </div>
+    </header>
+
+    <div class="chat-layout">
+      <!-- 左侧会话列表 -->
+      <aside class="session-panel">
+        <div class="session-panel-head">
+          <h2 class="session-panel-title">对话列表</h2>
+          <button type="button" class="new-chat-btn" :disabled="creating" @click="handleNewChat">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            {{ creating ? '创建中…' : '新建' }}
+          </button>
         </div>
-        <div v-else class="messages">
-          <div
-            v-for="(m, i) in conv.currentMessages"
-            :key="m.id ?? `${conv.currentId ?? 'session'}-${i}`"
-            class="message"
-            :class="m.role"
-          >
-            <!-- 编辑模式：独立居中 -->
-            <div v-if="editingIndex === i" class="edit-area">
-              <textarea
-                v-model="editText"
-                class="edit-textarea"
-                rows="4"
-              />
-              <div class="edit-actions">
-                <button type="button" class="edit-btn cancel" @click="handleCancelEdit">取消</button>
-                <button type="button" class="edit-btn save" @click="handleSaveEdit(i)">发送</button>
-              </div>
-            </div>
-            <!-- 正常气泡 -->
-            <template v-else>
-              <div class="bubble">
-                <div class="content markdown-body" v-html="renderMarkdown(m.content)"></div>
-              </div>
-              <!-- 知识库来源标记（AI 气泡下方，每个知识库独立显示） -->
-              <div v-if="m.role === 'assistant' && m.ragSources?.length" class="rag-badges">
+        <nav class="conversation-list">
+          <div v-for="key in GROUP_KEYS" :key="key">
+            <template v-if="groupedItems(key).length > 0">
+              <div class="conv-group-label">{{ GROUP_LABELS[key] }}</div>
+              <div
+                v-for="c in groupedItems(key)"
+                :key="c.id"
+                class="conversation-item"
+                :class="{ active: conv.currentId === c.id }"
+                @click="handleSelectConversation(c.id)"
+              >
+                <span class="conversation-title">{{ c.title }}</span>
                 <button
-                  v-for="kbName in uniqueKbNames(ragSourcesOf(m))"
-                  :key="kbName"
                   type="button"
-                  class="rag-badge"
-                  @click="handleRagBadgeClick(ragSourcesOf(m), kbName)"
+                  class="conversation-delete-btn"
+                  title="删除对话"
+                  @click.stop="handleDeleteConversation(c.id)"
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-                  {{ kbName }}
-                </button>
-              </div>
-              <!-- 工具调用标记 -->
-              <div v-if="m.role === 'assistant' && m.toolExecutions?.length" class="tool-badges">
-                <button
-                  v-for="(exec, ei) in m.toolExecutions"
-                  :key="exec.id ?? `${exec.toolName}-${ei}`"
-                  type="button"
-                  class="tool-badge"
-                  @click="handleToolBadgeClick(exec)"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                  {{ exec.toolName }}
-                </button>
-              </div>
-              <div v-if="m.role === 'user' && !streaming" class="message-actions">
-                <button type="button" class="action-btn" title="重新生成" @click="handleRegenerate(i)">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                </button>
-                <button type="button" class="action-btn" title="修改" @click="handleStartEdit(i)">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                 </button>
               </div>
             </template>
           </div>
-        </div>
-        <div class="input-area">
-          <textarea
-            v-model="inputText"
-            class="textarea"
-            placeholder="输入消息…"
-            rows="2"
-            :disabled="streaming"
-            @keydown.enter.exact.prevent="send"
-          />
-          <button
-            type="button"
-            class="send-btn"
-            :disabled="!inputText.trim() || streaming"
-            @click="send"
-          >
-            {{ streaming ? '回复中…' : '发送' }}
+          <p v-if="conv.conversations.length === 0" class="no-conversations">
+            暂无对话，点击「新建」开始
+          </p>
+        </nav>
+      </aside>
+
+      <!-- 主对话区 -->
+      <main class="chat-stage">
+        <div v-if="!conv.currentId" class="stage-empty">
+          <div class="stage-empty-icon" aria-hidden="true">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <p class="stage-empty-title">选择或新建一个对话</p>
+          <p class="stage-empty-desc">从左侧选择历史对话，或点击「新建」开始与 AI 聊天</p>
+          <button type="button" class="stage-empty-btn" :disabled="creating" @click="handleNewChat">
+            {{ creating ? '创建中…' : '新建对话' }}
           </button>
         </div>
-      </template>
-    </main>
 
-    <!-- 知识库来源弹框 -->
+        <div v-else class="chat-panel">
+          <div class="panel-toolbar">
+            <span class="panel-title">对话测试</span>
+            <div class="panel-toolbar-actions">
+              <button
+                type="button"
+                class="toolbar-btn"
+                :class="{ 'is-active': agentPanelOpen }"
+                title="智能体设置"
+                @click="toggleAgentPanel"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 8V4H8"/>
+                  <rect x="4" y="8" width="16" height="12" rx="2"/>
+                  <path d="M2 14h2"/>
+                  <path d="M20 14h2"/>
+                  <line x1="9" y1="13" x2="9" y2="15"/>
+                  <line x1="15" y1="13" x2="15" y2="15"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div ref="messagesEl" class="panel-body">
+            <div v-if="loadingHistory" class="panel-status">加载对话记录中…</div>
+
+            <div v-else-if="conv.currentMessages.length === 0" class="welcome-state">
+              <div class="welcome-avatar" aria-hidden="true">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <h3 class="welcome-name">{{ currentAgentName }}</h3>
+              <p class="welcome-hint">在这里直接对话，体验智能助手效果</p>
+              <div class="welcome-bubble">
+                <p>发送一条消息开始对话</p>
+              </div>
+            </div>
+
+            <div v-else class="messages">
+              <div
+                v-for="(m, i) in conv.currentMessages"
+                :key="m.id ?? `${conv.currentId ?? 'session'}-${i}`"
+                class="message"
+                :class="m.role"
+              >
+                <div v-if="editingIndex === i" class="edit-area">
+                  <textarea v-model="editText" class="edit-textarea" rows="4" />
+                  <div class="edit-actions">
+                    <button type="button" class="edit-btn cancel" @click="handleCancelEdit">取消</button>
+                    <button type="button" class="edit-btn save" @click="handleSaveEdit(i)">发送</button>
+                  </div>
+                </div>
+                <template v-else>
+                  <div v-if="m.role === 'assistant'" class="msg-avatar" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  </div>
+                  <div class="msg-content">
+                    <div class="bubble">
+                      <div class="content markdown-body" v-html="renderMarkdown(m.content)"></div>
+                    </div>
+                    <div v-if="m.role === 'assistant' && m.ragSources?.length" class="rag-badges">
+                      <button
+                        v-for="kbName in uniqueKbNames(ragSourcesOf(m))"
+                        :key="kbName"
+                        type="button"
+                        class="rag-badge"
+                        @click="handleRagBadgeClick(ragSourcesOf(m), kbName)"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                        {{ kbName }}
+                      </button>
+                    </div>
+                    <div v-if="m.role === 'assistant' && m.toolExecutions?.length" class="tool-badges">
+                      <button
+                        v-for="(exec, ei) in m.toolExecutions"
+                        :key="exec.id ?? `${exec.toolName}-${ei}`"
+                        type="button"
+                        class="tool-badge"
+                        @click="handleToolBadgeClick(exec)"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                        {{ exec.toolName }}
+                      </button>
+                    </div>
+                    <div v-if="m.role === 'user' && !streaming" class="message-actions">
+                      <button type="button" class="action-btn" title="重新生成" @click="handleRegenerate(i)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                      </button>
+                      <button type="button" class="action-btn" title="修改" @click="handleStartEdit(i)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-footer">
+            <div class="input-box" :class="{ disabled: streaming }">
+              <textarea
+                v-model="inputText"
+                class="input-field"
+                placeholder="发消息"
+                rows="1"
+                :disabled="streaming"
+                @keydown.enter.exact.prevent="send"
+                @input="autoResizeInput"
+              />
+              <button
+                type="button"
+                class="input-send-btn"
+                :disabled="!inputText.trim() || streaming"
+                :title="streaming ? '回复中…' : '发送'"
+                @click="send"
+              >
+                <svg v-if="streaming" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+            <p class="input-disclaimer">内容由 AI 生成，请仔细甄别</p>
+          </div>
+        </div>
+      </main>
+
+      <AgentSettingsPanel
+        v-if="agentPanelOpen"
+        :initial-agent-id="selectedAgentOptionId"
+        @close="agentPanelOpen = false"
+        @saved="handleAgentSaved"
+      />
+    </div>
+
     <Teleport to="body">
       <div v-if="ragModal" class="rag-modal-overlay" @click.self="ragModal = null">
         <div class="rag-modal">
@@ -176,9 +255,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import ToolExecutionModal from '@/components/ToolExecutionModal.vue'
+import AgentSettingsPanel from '@/components/AgentSettingsPanel.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useConversationStore } from '@/stores/conversation'
@@ -195,6 +275,10 @@ import {
   getToolExecutions,
 } from '@/api/chat'
 import type { HistoryMessage, HistoryData, HistoryResponse, SessionItem } from '@/api/chat'
+import { getAgentOptionList } from '@/api/agentOption'
+import type { AgentOptionItem } from '@/api/agentOption'
+
+const AGENT_OPTION_STORAGE_KEY = 'dialoger:agentOptionId'
 
 marked.setOptions({ gfm: true, breaks: true })
 
@@ -301,6 +385,22 @@ const currentTitle = computed(() =>
   conv.conversations.find(c => c.id === conv.currentId)?.title ?? ''
 )
 
+const userInitial = computed(() => {
+  const name = auth.user?.nickname || auth.user?.username || '?'
+  return name.charAt(0).toUpperCase()
+})
+
+const currentAgentName = computed(() => {
+  const id = selectedAgentOptionId.value
+  if (id != null) {
+    const opt = enabledAgentOptions.value.find((item) => item.id === id)
+    if (opt?.name) return opt.name
+  }
+  return '智能助手'
+})
+
+const messagesEl = ref<HTMLElement | null>(null)
+
 const GROUP_KEYS = ['today', 'week', 'month', 'older'] as const
 type GroupKey = (typeof GROUP_KEYS)[number]
 const GROUP_LABELS: Record<GroupKey, string> = {
@@ -345,7 +445,56 @@ const editingIndex = ref<number | null>(null)
 const editText = ref('')
 const ragModal = ref<RagSource[] | null>(null)
 const toolModal = ref<ToolExecution | null>(null)
+const agentOptionList = ref<AgentOptionItem[]>([])
+const selectedAgentOptionId = ref<number | null>(null)
+const agentPanelOpen = ref(false)
 let abortStream: (() => void) | null = null
+
+const enabledAgentOptions = computed(() =>
+  agentOptionList.value.filter((item) => item.enabled !== false),
+)
+
+function resolveSelectedAgentOptionId(options: AgentOptionItem[]): number | null {
+  if (options.length === 0) return null
+  const stored = localStorage.getItem(AGENT_OPTION_STORAGE_KEY)
+  const storedId = stored ? Number(stored) : NaN
+  if (Number.isFinite(storedId) && options.some((item) => item.id === storedId)) {
+    return storedId
+  }
+  return options[0]?.id ?? null
+}
+
+function getCurrentOptionId(): number | undefined {
+  return selectedAgentOptionId.value ?? undefined
+}
+
+async function loadAgentOptions() {
+  try {
+    const res = await getAgentOptionList()
+    if (res.success && Array.isArray(res.data)) {
+      agentOptionList.value = res.data
+      selectedAgentOptionId.value = resolveSelectedAgentOptionId(enabledAgentOptions.value)
+    }
+  } catch {
+    // 忽略
+  }
+}
+
+watch(selectedAgentOptionId, (id) => {
+  if (id != null) {
+    localStorage.setItem(AGENT_OPTION_STORAGE_KEY, String(id))
+  }
+})
+
+watch(
+  () => conv.currentMessages.length,
+  () => {
+    nextTick(() => {
+      const el = messagesEl.value
+      if (el) el.scrollTop = el.scrollHeight
+    })
+  },
+)
 
 // 打字机效果：后端 chunk 先入缓冲，再逐字显示；缓冲多时加快间隔
 let typewriterBuffer = ''
@@ -573,6 +722,7 @@ onMounted(async () => {
   } catch (e) {
     console.error('拉取对话列表失败:', e)
   }
+  await loadAgentOptions()
   // 恢复当前选中的会话并拉取该对话历史
   const sessionId = conv.getPersistedSessionId()
   if (sessionId) {
@@ -621,6 +771,17 @@ function goToSettings() {
   router.push('/settings')
 }
 
+function toggleAgentPanel() {
+  agentPanelOpen.value = !agentPanelOpen.value
+}
+
+async function handleAgentSaved(item: AgentOptionItem) {
+  await loadAgentOptions()
+  if (item.enabled !== false) {
+    selectedAgentOptionId.value = item.id
+  }
+}
+
 async function handleLogout() {
   await auth.logout()
   router.replace('/login')
@@ -664,7 +825,7 @@ async function resendFrom(index: number, text: string) {
   stopTypewriter()
   streamSessionId = sessionId
   abortStream = chatStream(
-    { sessionId, message: text, fromMessageId },
+    { sessionId, message: text, fromMessageId, optionId: getCurrentOptionId() },
     (chunk) => {
       typewriterBuffer += chunk
       startTypewriterIfNeeded()
@@ -753,6 +914,12 @@ function handleToolBadgeClick(execution: ToolExecution) {
   toolModal.value = execution
 }
 
+function autoResizeInput(e: Event) {
+  const el = e.target as HTMLTextAreaElement
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+}
+
 function send() {
   const text = inputText.value.trim()
   const sessionId = conv.currentId
@@ -767,7 +934,7 @@ function send() {
   stopTypewriter()
   streamSessionId = sessionId
   abortStream = chatStream(
-    { sessionId, message: text },
+    { sessionId, message: text, optionId: getCurrentOptionId() },
     (chunk) => {
       typewriterBuffer += chunk
       startTypewriterIfNeeded()
@@ -812,52 +979,227 @@ function send() {
   height: 100vh;
   min-height: 0;
   display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: var(--color-bg-page);
   color: var(--color-text-primary);
-  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-.sidebar {
-  width: 260px;
-  min-width: 260px;
+/* ── 顶栏 ───────────────────────────────────── */
+.top-nav {
   flex-shrink: 0;
-  height: 100vh;
   display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-right: 1px solid var(--color-border);
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  height: 56px;
+  padding: 0 1.25rem;
   background: var(--color-bg-card);
-  transition: border-color 0.3s ease, background-color 0.3s ease;
-}
-
-.sidebar-header {
-  padding: 1rem;
   border-bottom: 1px solid var(--color-border);
 }
 
-.title {
-  margin: 0 0 0.75rem 0;
-  font-size: 1.25rem;
+.top-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.brand-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-text-accent) 10%, var(--color-bg-page));
+  color: var(--color-text-accent);
+}
+
+.brand-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.nav-sep {
+  color: var(--color-text-tertiary);
+  font-size: 0.875rem;
+}
+
+.nav-title {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.agent-picker {
+  margin-right: 0.25rem;
+}
+
+.agent-select {
+  min-width: 140px;
+  max-width: 200px;
+  padding: 0.375rem 2rem 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' stroke='%238f959e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.625rem center;
+}
+
+.agent-select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.nav-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.nav-icon-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
+  border-color: var(--color-border);
+}
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.625rem 0.25rem 0.25rem;
+  border-radius: 999px;
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border);
+}
+
+.user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #69b1ff, #1677ff);
+}
+
+.user-name {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-text-btn {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.nav-text-btn:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-hover);
+}
+
+/* ── 主体布局 ───────────────────────────────── */
+.chat-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+/* ── 左侧会话面板 ───────────────────────────── */
+.session-panel {
+  width: 260px;
+  min-width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.session-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.session-panel-title {
+  margin: 0;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text-primary);
 }
 
 .new-chat-btn {
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  color: var(--color-text-primary);
-  background: var(--color-bg-input);
-  border: 1px solid var(--color-border-hover);
-  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3125rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #fff;
+  background: var(--color-button-primary);
+  border: none;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.15s;
 }
 
 .new-chat-btn:hover:not(:disabled) {
-  border-color: var(--color-border-focus);
-  background: var(--color-bg-page);
+  background: var(--color-button-primary-hover);
 }
 
 .new-chat-btn:disabled {
@@ -871,59 +1213,29 @@ function send() {
   overflow-y: auto;
   padding: 0.5rem;
   scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-
-.conversation-list:hover {
-  scrollbar-color: var(--color-border-hover) transparent;
-}
-
-.conversation-list::-webkit-scrollbar {
-  width: 4px;
-}
-
-.conversation-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.conversation-list::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 999px;
-}
-
-.conversation-list:hover::-webkit-scrollbar-thumb {
-  background: var(--color-border-hover);
-}
-
-.conversation-list::-webkit-scrollbar-thumb:hover {
-  background: var(--color-border-focus);
 }
 
 .conversation-item {
-  width: 100%;
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.6rem 0.75rem;
-  margin-bottom: 0.25rem;
-  font-size: 0.875rem;
-  text-align: left;
+  padding: 0.5625rem 0.75rem;
+  margin-bottom: 2px;
+  font-size: 0.8125rem;
   color: var(--color-text-primary);
-  background: transparent;
-  border: none;
   border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
-  box-sizing: border-box;
+  transition: background 0.15s;
 }
 
 .conversation-item:hover {
-  background: var(--color-bg-input);
+  background: var(--color-bg-page);
 }
 
 .conversation-item.active {
-  background: var(--color-bg-input);
+  background: color-mix(in srgb, var(--color-text-accent) 8%, var(--color-bg-page));
   color: var(--color-text-accent);
+  font-weight: 500;
 }
 
 .conversation-delete-btn {
@@ -940,7 +1252,7 @@ function send() {
   border-radius: 4px;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
 }
 
 .conversation-item:hover .conversation-delete-btn,
@@ -950,7 +1262,7 @@ function send() {
 
 .conversation-delete-btn:hover {
   color: #ef4444;
-  background: var(--color-bg-page);
+  background: var(--color-bg-card);
 }
 
 .conversation-title {
@@ -962,209 +1274,296 @@ function send() {
 }
 
 .no-conversations {
-  padding: 1rem 0.75rem;
+  padding: 1.5rem 0.75rem;
   margin: 0;
   font-size: 0.8125rem;
   color: var(--color-text-tertiary);
+  text-align: center;
+  line-height: 1.6;
 }
 
 .conv-group-label {
   padding: 0.5rem 0.75rem 0.25rem;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--color-text-tertiary);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.sidebar-footer {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border-top: 1px solid var(--color-border);
-}
-
-.theme-toggle {
-  padding: 0.35rem 0.5rem;
-  font-size: 1rem;
-  background: transparent;
-  border: 1px solid var(--color-border-hover);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.theme-toggle:hover {
-  border-color: var(--color-border-focus);
-  background: var(--color-bg-page);
-}
-
-.settings-btn {
-  padding: 0.35rem 0.5rem;
-  font-size: 1rem;
-  background: transparent;
-  border: 1px solid var(--color-border-hover);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.settings-btn:hover {
-  border-color: var(--color-border-focus);
-  background: var(--color-bg-page);
-}
-
-.user {
+/* ── 主对话区 ───────────────────────────────── */
+.chat-stage {
   flex: 1;
-  font-size: 0.8125rem;
-  color: var(--color-text-secondary);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.logout {
-  padding: 0.35rem 0.6rem;
-  font-size: 0.8125rem;
-  color: var(--color-text-secondary);
-  background: transparent;
-  border: 1px solid var(--color-border-hover);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.logout:hover {
-  color: var(--color-text-primary);
-  border-color: var(--color-border-focus);
-}
-
-.main {
+.stage-empty {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
-  padding: 1rem 1.5rem;
-}
-
-.chat-header {
-  flex-shrink: 0;
-  display: flex;
   align-items: center;
-  padding-bottom: 0.75rem;
-  margin-bottom: 0.75rem;
-  border-bottom: 1px solid var(--color-border);
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-.chat-header-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.empty-state,
-.empty {
-  flex: 1;
+.stage-empty-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.9375rem;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-bg-page);
   color: var(--color-text-tertiary);
 }
 
-.messages {
+.stage-empty-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.stage-empty-desc {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-tertiary);
+}
+
+.stage-empty-btn {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #fff;
+  background: var(--color-button-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.stage-empty-btn:hover:not(:disabled) {
+  background: var(--color-button-primary-hover);
+}
+
+.stage-empty-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.chat-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+.panel-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.panel-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.panel-toolbar-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--color-text-tertiary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toolbar-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
+  border-color: var(--color-border);
+}
+
+.toolbar-btn.is-active {
+  color: var(--color-text-accent);
+  background: color-mix(in srgb, var(--color-text-accent) 8%, var(--color-bg-page));
+  border-color: color-mix(in srgb, var(--color-text-accent) 30%, var(--color-border));
+}
+
+.panel-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-bottom: 1rem;
+  padding: 1.25rem 1.5rem;
   scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
 }
 
-.messages:hover {
-  scrollbar-color: var(--color-border-hover) transparent;
+.panel-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 0.875rem;
+  color: var(--color-text-tertiary);
 }
 
-.messages::-webkit-scrollbar {
-  width: 4px;
+/* ── 欢迎态 ─────────────────────────────────── */
+.welcome-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 520px;
+  margin: 2rem auto 0;
+  text-align: center;
 }
 
-.messages::-webkit-scrollbar-track {
-  background: transparent;
+.welcome-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 0.75rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e6f4ff, #bae0ff);
+  color: var(--color-text-accent);
 }
 
-.messages::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 999px;
+.welcome-name {
+  margin: 0 0 0.25rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
-.messages:hover::-webkit-scrollbar-thumb {
-  background: var(--color-border-hover);
+.welcome-hint {
+  margin: 0 0 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-tertiary);
 }
 
-.messages::-webkit-scrollbar-thumb:hover {
-  background: var(--color-border-focus);
+.welcome-bubble {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  text-align: left;
+}
+
+.welcome-bubble p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* ── 消息列表 ───────────────────────────────── */
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 720px;
+  margin: 0 auto;
 }
 
 .message {
-  margin-bottom: 1.25rem;
   display: flex;
-  flex-direction: column;
+  gap: 0.625rem;
 }
 
 .message.user {
-  align-items: flex-end;
-  padding-right: 3rem;
+  flex-direction: row-reverse;
 }
 
-.message.assistant {
+.msg-avatar {
+  flex-shrink: 0;
+  display: flex;
   align-items: flex-start;
-  padding-left: 3rem;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-top: 0.125rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e6f4ff, #bae0ff);
+  color: var(--color-text-accent);
+}
+
+.msg-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 85%;
+}
+
+.message.user .msg-content {
+  align-items: flex-end;
 }
 
 .bubble {
-  max-width: 75%;
-  padding: 0.65rem 1rem;
-  border-radius: 1rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: 12px;
   font-size: 0.9375rem;
-  line-height: 1.6;
+  line-height: 1.65;
   word-break: break-word;
 }
 
 .message.user .bubble {
-  background: var(--color-bg-input);
+  background: var(--color-bg-page);
   border: 1px solid var(--color-border);
-  border-bottom-right-radius: 0.25rem;
+  border-bottom-right-radius: 4px;
   color: var(--color-text-primary);
 }
 
 .message.assistant .bubble {
   background: transparent;
-  padding: 0.65rem 0;
+  padding: 0.125rem 0;
   color: var(--color-text-primary);
 }
 
 .message-actions {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 0.35rem;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
 }
 
-/* RAG 知识库来源标记容器 */
-.rag-badges {
+.rag-badges,
+.tool-badges {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
   margin-top: 0.25rem;
 }
 
-/* RAG 知识库来源标记按钮 */
 .rag-badge {
   display: inline-flex;
   align-items: center;
@@ -1176,22 +1575,12 @@ function send() {
   border-radius: 999px;
   border: 1px solid var(--color-border);
   background: transparent;
-  margin-top: 0.25rem;
-  align-self: flex-end;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: color 0.15s, border-color 0.15s;
 }
 
 .rag-badge:hover {
   color: var(--color-text-accent);
   border-color: var(--color-text-accent);
-}
-
-/* 工具调用标记 */
-.tool-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.25rem;
 }
 
 .tool-badge {
@@ -1206,17 +1595,283 @@ function send() {
   border-radius: 999px;
   border: 1px solid rgba(139, 92, 246, 0.22);
   background: rgba(139, 92, 246, 0.08);
-  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+  transition: all 0.15s;
 }
 
 .tool-badge:hover {
   color: #7c3aed;
   border-color: rgba(124, 58, 237, 0.35);
   background: rgba(139, 92, 246, 0.14);
-  transform: translateY(-1px);
 }
 
-/* 弹框遮罩 */
+/* ── 输入区 ─────────────────────────────────── */
+.panel-footer {
+  flex-shrink: 0;
+  padding: 0.75rem 1rem 0.625rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.input-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.input-box:focus-within {
+  border-color: color-mix(in srgb, var(--color-text-accent) 50%, var(--color-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-text-accent) 10%, transparent);
+}
+
+.input-box.disabled {
+  opacity: 0.75;
+}
+
+.input-icon-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--color-text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.input-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.input-field {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  max-height: 120px;
+  padding: 0.375rem 0;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background: transparent;
+  border: none;
+  resize: none;
+  outline: none;
+}
+
+.input-field::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.input-send-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: #fff;
+  background: var(--color-button-primary);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.input-send-btn:hover:not(:disabled) {
+  background: var(--color-button-primary-hover);
+}
+
+.input-send-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.input-disclaimer {
+  margin: 0.375rem 0 0;
+  font-size: 0.6875rem;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+/* ── 编辑区 ─────────────────────────────────── */
+.edit-area {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.edit-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-hover);
+  border-radius: 12px;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.edit-textarea:focus {
+  border-color: var(--color-border-focus);
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.edit-btn {
+  padding: 0.4rem 1rem;
+  font-size: 0.8125rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.edit-btn.save {
+  color: #fff;
+  background: var(--color-button-primary);
+  border: none;
+  font-weight: 500;
+}
+
+.edit-btn.save:hover {
+  background: var(--color-button-primary-hover);
+}
+
+.edit-btn.cancel {
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+}
+
+.edit-btn.cancel:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-hover);
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--color-text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.action-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
+}
+
+/* ── Markdown ───────────────────────────────── */
+.message .content {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  word-break: break-word;
+}
+
+.message .content.markdown-body :deep(p) { margin: 0.5em 0; }
+.message .content.markdown-body :deep(p:first-child) { margin-top: 0; }
+.message .content.markdown-body :deep(p:last-child) { margin-bottom: 0; }
+.message .content.markdown-body :deep(code) {
+  padding: 0.2em 0.4em;
+  font-size: 0.9em;
+  background: var(--color-bg-input);
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+}
+.message .content.markdown-body :deep(.code-block-wrapper) { position: relative; margin: 0.5em 0; }
+.message .content.markdown-body :deep(pre) {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  padding-bottom: 2rem;
+  overflow-x: auto;
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+.message .content.markdown-body :deep(.copy-code-btn) {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.message .content.markdown-body :deep(.copy-code-btn:hover) {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-hover);
+}
+.message .content.markdown-body :deep(.copy-code-btn.copied) {
+  color: #22c55e;
+  border-color: #22c55e;
+}
+.message .content.markdown-body :deep(pre code) {
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 0.875rem;
+}
+.message .content.markdown-body :deep(ul),
+.message .content.markdown-body :deep(ol) { margin: 0.5em 0; padding-left: 1.5em; }
+.message .content.markdown-body :deep(li) { margin: 0.2em 0; }
+.message .content.markdown-body :deep(blockquote) {
+  margin: 0.5em 0;
+  padding-left: 1em;
+  border-left: 4px solid var(--color-border-focus);
+  color: var(--color-text-secondary);
+}
+.message .content.markdown-body :deep(h1),
+.message .content.markdown-body :deep(h2),
+.message .content.markdown-body :deep(h3) {
+  margin: 0.75em 0 0.35em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.message .content.markdown-body :deep(h1) { font-size: 1.25rem; }
+.message .content.markdown-body :deep(h2) { font-size: 1.1rem; }
+.message .content.markdown-body :deep(h3) { font-size: 1rem; }
+.message .content.markdown-body :deep(a) { color: var(--color-text-accent); text-decoration: none; }
+.message .content.markdown-body :deep(a:hover) { text-decoration: underline; }
+.message .content.markdown-body :deep(strong) { font-weight: 600; }
+.message .content.markdown-body :deep(table) { border-collapse: collapse; font-size: 0.9em; }
+.message .content.markdown-body :deep(th),
+.message .content.markdown-body :deep(td) { padding: 0.35em 0.6em; border: 1px solid var(--color-border); }
+.message .content.markdown-body :deep(thead th) { background: var(--color-bg-input); font-weight: 600; }
+.message .content.markdown-body :deep(hr) { border: none; border-top: 1px solid var(--color-border); margin: 0.75em 0; }
+
+/* ── 弹框 ───────────────────────────────────── */
 .rag-modal-overlay {
   position: fixed;
   inset: 0;
@@ -1264,7 +1919,6 @@ function send() {
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .rag-modal-close:hover {
@@ -1276,51 +1930,16 @@ function send() {
   flex: 1;
   overflow-y: auto;
   padding: 0.75rem 1.1rem;
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
 }
 
-.rag-modal-body:hover {
-  scrollbar-color: var(--color-border-hover) transparent;
-}
-
-.rag-modal-body::-webkit-scrollbar {
-  width: 4px;
-}
-
-.rag-modal-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.rag-modal-body::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 999px;
-}
-
-.rag-modal-body:hover::-webkit-scrollbar-thumb {
-  background: var(--color-border-hover);
-}
-
-.rag-modal-body::-webkit-scrollbar-thumb:hover {
-  background: var(--color-border-focus);
-}
-
-.rag-source-item {
-  padding: 0.75rem 0;
-}
-
-.rag-source-item + .rag-source-item {
-  border-top: 1px solid var(--color-border);
-}
-
+.rag-source-item { padding: 0.75rem 0; }
+.rag-source-item + .rag-source-item { border-top: 1px solid var(--color-border); }
 .rag-source-kb {
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--color-text-accent);
   margin-bottom: 0.35rem;
-  letter-spacing: 0.02em;
 }
-
 .rag-source-text {
   font-size: 0.875rem;
   color: var(--color-text-secondary);
@@ -1329,262 +1948,40 @@ function send() {
   white-space: pre-wrap;
 }
 
-.action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  color: var(--color-text-tertiary);
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
+/* ── 响应式 ─────────────────────────────────── */
+@media (max-width: 900px) {
+  .user-name,
+  .nav-sep,
+  .nav-title {
+    display: none;
+  }
+
+  .session-panel {
+    width: 220px;
+    min-width: 220px;
+  }
 }
 
-.action-btn:hover {
-  color: var(--color-text-primary);
-  background: var(--color-bg-input);
-}
+@media (max-width: 680px) {
+  .chat-layout {
+    flex-direction: column;
+    padding: 8px;
+  }
 
-.action-btn svg {
-  display: block;
-}
+  .session-panel {
+    width: 100%;
+    min-width: 0;
+    max-height: 180px;
+  }
 
-.edit-area {
-  width: 100%;
-  align-self: center;
-  padding: 0 3rem;
-}
+  .user-chip {
+    display: none;
+  }
 
-.edit-textarea {
-  width: 100%;
-  min-height: 100px;
-  padding: 0.75rem 1rem;
-  font-size: 0.9375rem;
-  font-family: inherit;
-  color: var(--color-text-primary);
-  background: var(--color-bg-input);
-  border: 1px solid var(--color-border-hover);
-  border-radius: 12px;
-  resize: vertical;
-  outline: none;
-  box-sizing: border-box;
-  transition: border-color 0.2s ease;
-}
-
-.edit-textarea:focus {
-  border-color: var(--color-border-focus);
-}
-
-.edit-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.edit-btn {
-  padding: 0.4rem 1rem;
-  font-size: 0.8125rem;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.edit-btn.save {
-  color: #fff;
-  background: var(--color-button-primary);
-  border: none;
-  font-weight: 500;
-}
-
-.edit-btn.save:hover {
-  background: var(--color-button-primary-hover);
-}
-
-.edit-btn.cancel {
-  color: var(--color-text-secondary);
-  background: transparent;
-  border: 1px solid var(--color-border-hover);
-}
-
-.edit-btn.cancel:hover {
-  color: var(--color-text-primary);
-  border-color: var(--color-border-focus);
-}
-
-.message .content {
-  font-size: 0.9375rem;
-  line-height: 1.6;
-  word-break: break-word;
-}
-
-.message .content.markdown-body :deep(p) {
-  margin: 0.5em 0;
-}
-.message .content.markdown-body :deep(p:first-child) {
-  margin-top: 0;
-}
-.message .content.markdown-body :deep(p:last-child) {
-  margin-bottom: 0;
-}
-.message .content.markdown-body :deep(code) {
-  padding: 0.2em 0.4em;
-  font-size: 0.9em;
-  background: var(--color-bg-input);
-  border-radius: 4px;
-  border: 1px solid var(--color-border);
-}
-.message .content.markdown-body :deep(.code-block-wrapper) {
-  position: relative;
-  margin: 0.5em 0;
-}
-.message .content.markdown-body :deep(pre) {
-  margin: 0;
-  padding: 0.75rem 1rem;
-  padding-bottom: 2rem;
-  overflow-x: auto;
-  background: var(--color-bg-input);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-}
-.message .content.markdown-body :deep(.copy-code-btn) {
-  position: absolute;
-  right: 0.5rem;
-  bottom: 0.5rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  color: var(--color-text-tertiary);
-  background: var(--color-bg-page);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.message .content.markdown-body :deep(.copy-code-btn:hover) {
-  color: var(--color-text-primary);
-  border-color: var(--color-border-hover);
-}
-.message .content.markdown-body :deep(.copy-code-btn.copied) {
-  color: #22c55e;
-  border-color: #22c55e;
-}
-.message .content.markdown-body :deep(pre code) {
-  padding: 0;
-  background: none;
-  border: none;
-  font-size: 0.875rem;
-}
-.message .content.markdown-body :deep(ul),
-.message .content.markdown-body :deep(ol) {
-  margin: 0.5em 0;
-  padding-left: 1.5em;
-}
-.message .content.markdown-body :deep(li) {
-  margin: 0.2em 0;
-}
-.message .content.markdown-body :deep(blockquote) {
-  margin: 0.5em 0;
-  padding-left: 1em;
-  border-left: 4px solid var(--color-border-focus);
-  color: var(--color-text-secondary);
-}
-.message .content.markdown-body :deep(h1),
-.message .content.markdown-body :deep(h2),
-.message .content.markdown-body :deep(h3) {
-  margin: 0.75em 0 0.35em;
-  font-weight: 600;
-  line-height: 1.3;
-}
-.message .content.markdown-body :deep(h1) { font-size: 1.25rem; }
-.message .content.markdown-body :deep(h2) { font-size: 1.1rem; }
-.message .content.markdown-body :deep(h3) { font-size: 1rem; }
-.message .content.markdown-body :deep(a) {
-  color: var(--color-text-accent);
-  text-decoration: none;
-}
-.message .content.markdown-body :deep(a:hover) {
-  text-decoration: underline;
-}
-.message .content.markdown-body :deep(strong) {
-  font-weight: 600;
-}
-.message .content.markdown-body :deep(table) {
-  border-collapse: collapse;
-  font-size: 0.9em;
-}
-.message .content.markdown-body :deep(th),
-.message .content.markdown-body :deep(td) {
-  padding: 0.35em 0.6em;
-  border: 1px solid var(--color-border);
-}
-.message .content.markdown-body :deep(thead th) {
-  background: var(--color-bg-input);
-  font-weight: 600;
-}
-.message .content.markdown-body :deep(hr) {
-  border: none;
-  border-top: 1px solid var(--color-border);
-  margin: 0.75em 0;
-}
-
-.input-area {
-  flex-shrink: 0;
-  display: flex;
-  gap: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--color-border);
-}
-
-.textarea {
-  flex: 1;
-  min-width: 0;
-  padding: 0.75rem 1rem;
-  font-size: 0.9375rem;
-  font-family: inherit;
-  color: var(--color-text-primary);
-  background: var(--color-bg-input);
-  border: 1px solid var(--color-border-hover);
-  border-radius: 8px;
-  resize: none;
-  outline: none;
-  transition: all 0.3s ease;
-}
-
-.textarea::placeholder {
-  color: var(--color-text-tertiary);
-}
-
-.textarea:focus {
-  border-color: var(--color-border-focus);
-}
-
-.send-btn {
-  padding: 0.75rem 1.25rem;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: #fff;
-  background: var(--color-button-primary);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  align-self: flex-end;
-  transition: background-color 0.3s ease;
-}
-
-.send-btn:hover:not(:disabled) {
-  background: var(--color-button-primary-hover);
-}
-
-.send-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  .agent-select {
+    min-width: 110px;
+    max-width: 140px;
+  }
 }
 </style>
+

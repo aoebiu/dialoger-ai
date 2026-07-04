@@ -6,7 +6,7 @@ import lombok.Data;
  * 聊天选项配置
  */
 @Data
-public class ChatOptionConfig {
+public class ChatAgentOptionConfig {
     /**
      * 配置名称
      */
@@ -37,16 +37,17 @@ public class ChatOptionConfig {
      */
     private Boolean contentAggregator;
 
-    /**
-     * 内容注入器提示词
-     */
-    private String contentInjectorPrompt;
 
     /**
      * 是否存储在数据库
      */
     private Boolean inDB;
 
-    public ChatOptionConfig() {
+    /**
+     * 系统提示词
+     */
+    private String systemPrompt;
+
+    public ChatAgentOptionConfig() {
     }
 }

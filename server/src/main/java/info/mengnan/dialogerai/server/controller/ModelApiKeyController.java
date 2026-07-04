@@ -2,7 +2,7 @@ package info.mengnan.dialogerai.server.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import info.mengnan.dialogerai.common.param.ModelType;
-import info.mengnan.dialogerai.common.util.JSONUtil;
+import info.mengnan.dialogerai.rag.provider.ModelParamSchemaRegistry;
 import info.mengnan.dialogerai.repository.entity.ChatApiKey;
 import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.server.service.MemberService;
@@ -22,6 +22,15 @@ public class ModelApiKeyController {
     private final ModelApiKeyService modelApiKeyService;
     private final MemberService memberService;
 
+    /**
+     * 获取全部 Provider × 模型类型的参数 Schema（字段名、类型、范围、默认值）。
+     * 前端应在应用内缓存结果，仅在缓存缺失时调用一次。
+     */
+    @GetMapping("/schema")
+    public R getParamSchema() {
+        return R.ok(ModelParamSchemaRegistry.listAllSchemas());
+    }
+
     @GetMapping("/list")
     public R listModels() {
         Long memberId = StpUtil.getLoginIdAsLong();
@@ -33,14 +42,12 @@ public class ModelApiKeyController {
     public R createApiKey(@RequestParam(name = "modelName") String modelName,
                           @RequestParam(name = "modelProvider") String modelProvider,
                           @RequestParam(name = "keyType") String keyType,
-                          @RequestParam(name = "apiKey") String apiKey,
-                          @RequestParam(name = "param", required = false) String param) {
+                          @RequestParam(name = "apiKey") String apiKey) {
 
         if (modelName == null || modelName.isBlank()
                 || modelProvider == null || modelProvider.isBlank()
                 || keyType == null || keyType.isBlank()
-                || apiKey == null || apiKey.isBlank()
-                || (param != null && !param.isBlank() && !JSONUtil.isJsonObj(param)))
+                || apiKey == null || apiKey.isBlank())
             return R.error(MODEL_PARAM_INVALID);
 
         Long memberId = StpUtil.getLoginIdAsLong();

@@ -9,25 +9,30 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * chat_option 和 chat_api_key 的关联表
+ * chat_agent_option 和 chat_api_key 的关联表
  * 用于表示用户的聊天模型配置启用了哪些模型（多对多关系）
  */
 @Data
-@TableName("chat_option_api_key_rel")
-public class ChatOptionApiKeyRel {
+@TableName("chat_agent_option_api_key_rel")
+public class ChatAgentOptionApiKeyRel {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
     /**
-     * 聊天配置ID
+     * Agent 配置 ID
      */
-    private Long chatOptionId;
+    private Long chatAgentOptionId;
 
     /**
      * API Key配置ID
      */
     private Long chatApiKeyId;
+
+    /**
+     * 该 Agent 绑定此模型时的调参 JSON，结构与 Provider 对应的 Params 类一致
+     */
+    private String params;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

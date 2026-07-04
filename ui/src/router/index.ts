@@ -51,6 +51,16 @@ const router = createRouter({
           name: 'kbDetail',
           component: () => import('../views/KnowledgeBaseDetailView.vue'),
         },
+        {
+          path: 'agent/create',
+          name: 'agentOptionCreate',
+          component: () => import('../views/AgentOptionDetailView.vue'),
+        },
+        {
+          path: 'agent/:id',
+          name: 'agentOptionDetail',
+          component: () => import('../views/AgentOptionDetailView.vue'),
+        },
       ],
     },
     {

@@ -11,24 +11,24 @@
 :root,
 [data-theme='light'] {
   /* Background colors */
-  --color-bg-page: #ffffff;
-  --color-bg-card: #f9fafb;
+  --color-bg-page: #f7f8fa;
+  --color-bg-card: #ffffff;
   --color-bg-input: #f3f4f6;
 
   /* Border colors */
-  --color-border: #e5e7eb;
-  --color-border-hover: #d1d5db;
-  --color-border-focus: #6366f1;
+  --color-border: #e8eaed;
+  --color-border-hover: #d9dce0;
+  --color-border-focus: #1677ff;
 
   /* Text colors */
-  --color-text-primary: #111827;
-  --color-text-secondary: #6b7280;
-  --color-text-tertiary: #9ca3af;
-  --color-text-accent: #7c3aed;
+  --color-text-primary: #1f2329;
+  --color-text-secondary: #646a73;
+  --color-text-tertiary: #8f959e;
+  --color-text-accent: #1677ff;
 
   /* Button colors */
-  --color-button-primary: #6366f1;
-  --color-button-primary-hover: #4f46e5;
+  --color-button-primary: #1677ff;
+  --color-button-primary-hover: #0958d9;
 
   /* Error color */
   --color-error: #ef4444;

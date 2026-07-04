@@ -5,13 +5,15 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.Data;
 import java.time.LocalDateTime;
+import java.util.List;
 
 
 @Data
-@TableName("chat_option")
-public class ChatOption {
+@TableName(value = "chat_agent_option", autoResultMap = true)
+public class ChatAgentOption {
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -55,6 +57,11 @@ public class ChatOption {
      */
     private String contentInjectorPrompt;
 
+    /**
+     * 系统提示词
+     */
+    private String systemPrompt;
+
     @TableField("in_DB")
     private Boolean inDB;
 
@@ -62,6 +69,12 @@ public class ChatOption {
      * 备注
      */
     private String remark;
+
+    /**
+     * 绑定的知识库 ID 列表，如 [1,2,3]
+     */
+    @TableField(value = "kb_ids", typeHandler = JacksonTypeHandler.class)
+    private List<Long> kbIds;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

@@ -56,4 +56,12 @@ public interface KnowledgeBaseMapper extends BaseMapper<KnowledgeBase> {
                 .eq(KnowledgeBase::getIndexName, indexName)
                 .eq(KnowledgeBase::getDeleted, 0));
     }
+
+    default List<KnowledgeBase> findByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty())
+            return List.of();
+        return selectList(new LambdaQueryWrapper<KnowledgeBase>()
+                .in(KnowledgeBase::getId, ids)
+                .eq(KnowledgeBase::getDeleted, 0));
+    }
 }

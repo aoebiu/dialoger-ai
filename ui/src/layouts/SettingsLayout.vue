@@ -77,6 +77,7 @@ const allMenuGroups: MenuGroup[] = [
   {
     title: '系统设置',
     items: [
+      { id: 'agentOption', label: 'Agent 配置' },
       { id: 'apikey', label: 'API Key 管理' },
       { id: 'bizConfig', label: '外部服务配置' },
       { id: 'modelConfig', label: '模型配置' },

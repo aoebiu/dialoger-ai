@@ -5,7 +5,10 @@ import lombok.Data;
 @Data
 public class DefaultModelConfig {
 
+    @Deprecated
     private String modelName = "qwen3-vl-plus";
+
+    @Deprecated
     private String compressModelName = "qwen-turbo";
 
     public static final Long DEFAULT_OPTION_ID = 1L;
