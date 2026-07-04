@@ -2,11 +2,6 @@
 
 **DialogerAI** 是一个智能对话系统，支持动态配置各种模型与工具（Tools），提供文档向量化、RAG 检索增强生成（Retrieval-Augmented Generation）以及流式对话输出功能。
 
-> ⚠️ 当前项目仍在搭建中，部分功能尚不完善，但已可进行体验。
->
->
-> 
-
  需求文档表格: https://dcn4jaj8tits.feishu.cn/wiki/Ef0OwrTSviRd35kiIPfcRrE2nLg?table=tbldu1GZwJ8ymFWT&view=vewP2B92zv
 ### 问题反馈
 
@@ -23,22 +18,15 @@
 
 推荐通过发布包方式启动服务，步骤如下。
 
-### 1. 打包
+### 1. 下载发布包
 
-在项目根目录执行：
-
-```bash
-./mvnw clean package -Prelease-server
-```
+前往 [GitHub Releases](https://github.com/aoebiu/ai-talk/releases) 下载最新版本的 `dialoger-ai-server-*.tar.gz`（Linux / macOS）或 `.zip`（Windows）。
 
 ### 2. 解压发布包
 
-进入 `distribution` 目录，解压 `target` 下以 `dialoger-ai-server` 开头的压缩包（`.tar.gz` 或 `.zip`）：
-
 ```bash
-cd distribution
-tar -xzf target/dialoger-ai-server-*.tar.gz
-# 或使用 zip：unzip target/dialoger-ai-server-*.zip
+tar -xzf dialoger-ai-server-*.tar.gz
+# 或使用 zip：unzip dialoger-ai-server-*.zip
 cd dialoger-ai-server
 ```
 
