@@ -8,11 +8,11 @@ import info.mengnan.dialogerai.rag.config.DefaultModelConfig;
 import info.mengnan.dialogerai.kb.config.ElasticsearchProperties;
 import info.mengnan.dialogerai.kb.core.DynamicEmbeddingStoreRegistry;
 import info.mengnan.dialogerai.rag.container.factory.CapableModelFactory;
+import info.mengnan.dialogerai.rag.container.factory.ChatModelFactory;
 import info.mengnan.dialogerai.rag.container.factory.UniversalModelFactory;
 import info.mengnan.dialogerai.rag.service.PromptTemplateManager;
 import info.mengnan.dialogerai.rag.injector.RagSourceStore;
 import info.mengnan.dialogerai.rag.service.DirectModelInvoker;
-import info.mengnan.dialogerai.server.service.ModelConfigService;
 import info.mengnan.dialogerai.tool.ToolExecutionStore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -101,15 +101,8 @@ public class RagConfiguration {
     }
 
     @Bean
-    public DirectModelInvoker directModelInvoker(UniversalModelFactory modelFactory,
-                                                 ModelConfigService modelConfigService,
-                                                 DefaultModelConfig modelConfig,
-                                                 PromptTemplateManager promptTemplateManager) {
-        return new DirectModelInvoker(modelFactory,
-                modelConfigService::findModel,
-                modelConfigService::findDefaultDirectChatModelName,
-                promptTemplateManager,
-                modelConfig);
+    public DirectModelInvoker directModelInvoker(PromptTemplateManager promptTemplateManager, ChatModelFactory chatModelFactory) {
+        return new DirectModelInvoker(promptTemplateManager,chatModelFactory);
     }
 
 }

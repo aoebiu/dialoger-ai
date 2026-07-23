@@ -77,6 +77,7 @@ public class AgentOptionService {
 
     public Map<String, List<BindableModelOption>> listBindableModels(Long ownerId) {
         Map<String, List<BindableModelOption>> fromDb = chatApiKeyRepository.findByMemberId(ownerId).stream()
+                .filter(key -> Boolean.TRUE.equals(key.getEnabled()))
                 .collect(Collectors.groupingBy(
                         ChatApiKey::getKeyType,
                         Collectors.mapping(
@@ -108,6 +109,12 @@ public class AgentOptionService {
         if (option == null || option.getKbIds() == null)
             return List.of();
         return option.getKbIds();
+    }
+
+    public ModelBinding findBoundModel(Long agentOptionId, ModelType modelType) {
+        if (agentOptionId == null || modelType == null)
+            return null;
+        return loadModelBindings(agentOptionId).get(modelType.n());
     }
 
     public List<KbIndexRef> resolveBoundKbIndexRefs(Long agentOptionId) {

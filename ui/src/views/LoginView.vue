@@ -10,8 +10,36 @@
         {{ theme.resolvedTheme === 'dark' ? '🌙' : '☀️' }}
       </button>
       <h1 class="title">Dialoger AI</h1>
-      <p class="subtitle">登录后与 AI 对话</p>
+      <p class="subtitle">{{ isRegister ? '使用分享码注册并加入团队' : '登录后与 AI 对话' }}</p>
+
+      <div class="mode-tabs">
+        <button
+          type="button"
+          class="mode-tab"
+          :class="{ active: !isRegister }"
+          @click="switchMode(false)"
+        >
+          登录
+        </button>
+        <button
+          type="button"
+          class="mode-tab"
+          :class="{ active: isRegister }"
+          @click="switchMode(true)"
+        >
+          注册
+        </button>
+      </div>
+
       <form class="form" @submit.prevent="onSubmit">
+        <input
+          v-if="isRegister"
+          v-model="shareCode"
+          type="text"
+          class="input"
+          placeholder="分享码（必填）"
+          autocomplete="off"
+        />
         <input
           v-model="username"
           type="text"
@@ -24,11 +52,12 @@
           type="password"
           class="input"
           placeholder="密码"
-          autocomplete="current-password"
+          :autocomplete="isRegister ? 'new-password' : 'current-password'"
         />
         <p v-if="error" class="error">{{ error }}</p>
+        <p v-if="success" class="success">{{ success }}</p>
         <button type="submit" class="btn" :disabled="loading">
-          {{ loading ? '登录中…' : '登录' }}
+          {{ submitLabel }}
         </button>
       </form>
     </div>
@@ -40,6 +69,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
+import { register } from '@/api/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -49,23 +79,59 @@ const themeTooltip = computed(() =>
   theme.resolvedTheme === 'dark' ? '切换到浅色模式' : '切换到深色模式'
 )
 
+const isRegister = ref(false)
 const username = ref('')
 const password = ref('')
+const shareCode = ref('')
 const error = ref('')
+const success = ref('')
 const loading = ref(false)
+
+const submitLabel = computed(() => {
+  if (loading.value) return isRegister.value ? '注册中…' : '登录中…'
+  return isRegister.value ? '注册' : '登录'
+})
+
+function switchMode(registerMode: boolean) {
+  isRegister.value = registerMode
+  error.value = ''
+  success.value = ''
+}
 
 async function onSubmit() {
   error.value = ''
+  success.value = ''
   if (!username.value.trim() || !password.value) {
     error.value = '请输入用户名和密码'
     return
   }
+  if (isRegister.value && !shareCode.value.trim()) {
+    error.value = '请输入分享码'
+    return
+  }
+
   loading.value = true
   try {
-    await auth.login(username.value.trim(), password.value)
-    router.replace('/')
+    if (isRegister.value) {
+      const res = await register({
+        username: username.value.trim(),
+        password: password.value,
+        shareCode: shareCode.value.trim(),
+      })
+      if (!res.success) {
+        error.value = res.message || '注册失败'
+        return
+      }
+      success.value = '注册成功，请登录'
+      isRegister.value = false
+      shareCode.value = ''
+      password.value = ''
+    } else {
+      await auth.login(username.value.trim(), password.value)
+      router.replace('/')
+    }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '登录失败'
+    error.value = e instanceof Error ? e.message : (isRegister.value ? '注册失败' : '登录失败')
   } finally {
     loading.value = false
   }
@@ -116,10 +182,32 @@ async function onSubmit() {
   transition: color 0.3s ease;
 }
 .subtitle {
-  margin: 0 0 1.5rem;
+  margin: 0 0 1.25rem;
   font-size: 0.875rem;
   color: var(--color-text-tertiary);
   transition: color 0.3s ease;
+}
+.mode-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+.mode-tab {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.mode-tab.active {
+  color: #fff;
+  background: var(--color-button-primary);
+  border-color: var(--color-button-primary);
 }
 .form {
   display: flex;
@@ -147,6 +235,11 @@ async function onSubmit() {
   font-size: 0.875rem;
   color: var(--color-error);
   transition: color 0.3s ease;
+}
+.success {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #198754;
 }
 .btn {
   padding: 0.75rem 1rem;

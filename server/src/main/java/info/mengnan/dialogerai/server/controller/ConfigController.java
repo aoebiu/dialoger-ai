@@ -4,6 +4,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import info.mengnan.dialogerai.repository.entity.BizConfig;
 import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.server.param.config.ConfigSaveRequest;
+import info.mengnan.dialogerai.server.param.team.MemberTeamContext;
 import info.mengnan.dialogerai.server.service.BizConfigService;
 import info.mengnan.dialogerai.server.service.MemberService;
 import jakarta.validation.Valid;
@@ -34,9 +35,10 @@ public class ConfigController {
     @GetMapping("/list")
     public R list() {
         Long memberId = StpUtil.getLoginIdAsLong();
-        boolean isOwner = memberService.isOwner(memberId);
-        Long teamId = memberService.resolveTeamId(memberId);
-        return R.ok(bizConfigService.list(memberId, isOwner, teamId));
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null)
+            return R.error(MEMBER_NOT_FOUND);
+        return R.ok(bizConfigService.list(memberId, ctx.isOwner(), ctx.teamId()));
     }
 
     /**
@@ -56,15 +58,15 @@ public class ConfigController {
             return R.ok(bizConfigService.toDetailResponse(row));
         }
 
-        Long teamId = memberService.resolveTeamId(memberId);
-        if (!memberService.isTeamMember(teamId, targetMemberId))
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null || !memberService.isTeamMember(ctx, targetMemberId))
             return R.error(CONFIG_NOT_FOUND);
 
         BizConfig row = bizConfigService.findByMemberAndKey(targetMemberId, key);
         if (row == null)
             return R.error(CONFIG_NOT_FOUND);
 
-        if (memberService.isOwner(memberId))
+        if (ctx.isOwner())
             return R.ok(bizConfigService.toDetailResponse(row));
         return R.ok(bizConfigService.toKeysMaskedDetailResponse(row));
     }
@@ -105,9 +107,12 @@ public class ConfigController {
     }
 
     private Long resolveEffectiveMemberId(Long currentMemberId, Long targetMemberId) {
-        if (targetMemberId == null || !memberService.isOwner(currentMemberId))
+        if (targetMemberId == null)
             return currentMemberId;
-        if (!memberService.isTeamMember(memberService.resolveTeamId(currentMemberId), targetMemberId))
+        MemberTeamContext ctx = memberService.resolveTeamContext(currentMemberId);
+        if (ctx == null || !ctx.isOwner())
+            return currentMemberId;
+        if (!memberService.isTeamMember(ctx, targetMemberId))
             return null;
         return targetMemberId;
     }

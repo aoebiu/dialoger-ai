@@ -2,6 +2,7 @@ package info.mengnan.dialogerai.server.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import info.mengnan.dialogerai.common.util.JSONUtil;
+import info.mengnan.dialogerai.rag.config.ModelConfig;
 import info.mengnan.dialogerai.rag.constant.promptTemplate.PromptTemplateConstant;
 import info.mengnan.dialogerai.rag.service.DirectModelInvoker;
 import info.mengnan.dialogerai.rag.service.PromptTemplateManager;
@@ -13,10 +14,8 @@ import info.mengnan.dialogerai.server.param.functionCall.FunctionCallScriptGener
 import info.mengnan.dialogerai.server.param.functionCall.FunctionCallTestCaseGenerateRequest;
 import info.mengnan.dialogerai.server.param.functionCall.FunctionCallTestRequest;
 import info.mengnan.dialogerai.server.param.functionCall.ToolCapabilityAnalysisResult;
-import info.mengnan.dialogerai.server.service.AsyncTaskService;
-import info.mengnan.dialogerai.server.service.FunctionCallService;
-import info.mengnan.dialogerai.server.service.MemberService;
-import info.mengnan.dialogerai.server.service.ToolAdapterService;
+import info.mengnan.dialogerai.server.param.team.MemberTeamContext;
+import info.mengnan.dialogerai.server.service.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -35,6 +34,7 @@ public class FunctionCallController {
 
     private final FunctionCallService functionCallService;
     private final MemberService memberService;
+    private final ModelConfigService modelConfigService;
     private final DirectModelInvoker directModelInvoker;
     private final PromptTemplateManager promptTemplateManager;
     private final ToolAdapterService toolAdapterService;
@@ -43,7 +43,10 @@ public class FunctionCallController {
     @GetMapping("/list")
     public R list() {
         Long memberId = StpUtil.getLoginIdAsLong();
-        return R.ok(functionCallService.list(memberService.resolveTeamId(memberId)));
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null)
+            return R.error(MEMBER_MANAGE_DENIED);
+        return R.ok(functionCallService.list(ctx.teamId()));
     }
 
     @GetMapping("/{id}")
@@ -79,7 +82,12 @@ public class FunctionCallController {
             return R.error(FC_PROMPT_EMPTY);
 
         Long memberId = StpUtil.getLoginIdAsLong();
-        Long ownerId = memberService.resolveResourceOwnerId(memberId);
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        ModelConfig modelConfig = modelConfigService.findModelById(ctx.defaultChatModelId());
+        if (modelConfig == null)
+            return R.error(MODEL_DEFAULT_REQUIRED);
+
+        Long ownerId = ctx.ownerId();
         String taskId = asyncTaskService.createTask(memberId, AsyncTaskType.GENERATE_SCRIPT,
                 List.of("能力分析", "生成工具元数据"));
 
@@ -91,15 +99,18 @@ public class FunctionCallController {
                 String analysisResult = directModelInvoker.directInvoke(
                         ownerId,
                         "generateScript.capabilityAnalyzer",
-                        "tool_capability_analysis", phase1Variables);
-                ToolCapabilityAnalysisResult capabilities = JSONUtil.toBean(analysisResult, ToolCapabilityAnalysisResult.class);
+                        "tool_capability_analysis",
+                        phase1Variables,
+                        modelConfig);
 
+                ToolCapabilityAnalysisResult capabilities = JSONUtil.toBean(analysisResult, ToolCapabilityAnalysisResult.class);
                 asyncTaskService.updateStepRunning(taskId, 2);
                 String baseTemplate = promptTemplateManager.getTemplate("tool_metadata_generation").template();
                 String result = directModelInvoker.directInvokeRaw(
                         ownerId,
                         "generateScript.toolMetadataGenerator",
-                        generatePrompt(baseTemplate, capabilities, request.getPrompt()));
+                        generatePrompt(baseTemplate, capabilities, request.getPrompt()),
+                        modelConfig);
 
                 asyncTaskService.completeTask(taskId, result);
             } catch (Exception e) {
@@ -175,12 +186,16 @@ public class FunctionCallController {
             return R.error(FC_PARAM_INVALID);
 
         Long memberId = StpUtil.getLoginIdAsLong();
-        Long ownerId = memberService.resolveResourceOwnerId(memberId);
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
         if (!hasTeamAccess(memberId, tool.getMemberId()))
             return R.error(FC_ACCESS_DENIED);
 
         if (request.getCount() < 1 || request.getCount() > 20)
             return R.error(FC_TEST_COUNT_INVALID);
+
+        ModelConfig modelConfig = modelConfigService.findModelById(ctx.defaultChatModelId());
+        if (modelConfig == null)
+            return R.error(MODEL_DEFAULT_REQUIRED);
 
         Map<String, Object> testCaseVars = new HashMap<>();
         testCaseVars.put("count", request.getCount());
@@ -192,10 +207,11 @@ public class FunctionCallController {
 
         try {
             String result = directModelInvoker.directInvoke(
-                    ownerId,
+                    ctx.ownerId(),
                     "generateScript.testCases",
                     "tool_case_generation",
-                    testCaseVars);
+                    testCaseVars,
+                    modelConfig);
             return R.ok(Map.of("testCases", result));
         } catch (Exception e) {
             log.error("function call test case generation failed: id={}, name={}", id, tool.getName(), e);
@@ -223,11 +239,13 @@ public class FunctionCallController {
     }
 
     private boolean hasTeamAccess(Long memberId, Long toolOwnerMemberId) {
-        return memberService.isTeamMember(memberService.resolveTeamId(memberId), toolOwnerMemberId);
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        return memberService.isTeamMember(ctx, toolOwnerMemberId);
     }
 
     private boolean hasWriteAccess(Long memberId, Long toolOwnerMemberId) {
-        if (memberService.isOwner(memberId))
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx != null && ctx.isOwner())
             return true;
         return memberId.equals(toolOwnerMemberId);
     }

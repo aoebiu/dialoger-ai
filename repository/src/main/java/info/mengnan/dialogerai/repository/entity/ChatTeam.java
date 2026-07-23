@@ -20,6 +20,12 @@ public class ChatTeam {
 
     private String name;
 
+    /** 团队分享码，用于注册时绑定到该团队 */
+    @TableField("share_code")
+    private String shareCode;
+
+    private Long defaultChatModelId;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

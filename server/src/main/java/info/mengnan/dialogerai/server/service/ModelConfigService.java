@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -27,6 +28,21 @@ public class ModelConfigService {
 
     private final ChatApiKeyRepository chatApiKeyRepository;
     private final ChatAgentOptionApiKeyRelRepository chatAgentOptionApiKeyRelRepository;
+
+    /**
+     * 根据模型 API Key ID 查询模型配置
+     */
+    public ModelConfig findModelById(Long modelId) {
+        if (modelId == null) {
+            return null;
+        }
+        ChatApiKey apiKey = chatApiKeyRepository.findById(modelId);
+        if (apiKey == null) {
+            log.warn("Model API Key not found: id={}", modelId);
+            return null;
+        }
+        return buildModelConfig(apiKey, null);
+    }
 
     /**
      * 根据模型名称和类型从数据库查询模型配置
@@ -57,22 +73,6 @@ public class ModelConfigService {
         }
     }
 
-    public String findDefaultDirectChatModelName(Long ownerId) {
-        if (ownerId == null)
-            return null;
-        ChatApiKey key = chatApiKeyRepository.findDefaultDirectChatByMemberId(ownerId);
-        return key != null ? key.getModelName() : null;
-    }
-
-    public Map<ModelType, ModelConfig> loadModelConfigs(Long memberId) {
-        return chatApiKeyRepository.findByMemberId(memberId).stream()
-                .collect(Collectors.toMap(
-                        chatApiKey -> ModelType.valueOf(chatApiKey.getKeyType().toUpperCase()),
-                        key -> buildModelConfig(key, null),
-                        (existing, replacement) -> existing
-                ));
-    }
-
     /**
      * 根据 Agent 绑定的 API Key 关联加载模型配置，params 取自关联表。
      */
@@ -89,12 +89,11 @@ public class ModelConfigService {
         return rels.stream()
                 .map(rel -> {
                     ChatApiKey apiKey = apiKeyMap.get(rel.getChatApiKeyId());
-                    if (apiKey == null) {
-                        return null;
-                    }
+                    if (apiKey == null) return null;
+
                     return buildModelConfig(apiKey, rel.getParams());
                 })
-                .filter(config -> config != null)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toMap(
                         config -> ModelType.valueOf(config.getKeyType().toUpperCase()),
                         Function.identity(),

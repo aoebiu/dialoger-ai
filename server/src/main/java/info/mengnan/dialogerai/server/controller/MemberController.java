@@ -2,15 +2,16 @@ package info.mengnan.dialogerai.server.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import info.mengnan.dialogerai.repository.entity.ChatMember;
-import info.mengnan.dialogerai.repository.entity.ChatMemberRelation;
-import info.mengnan.dialogerai.repository.entity.ChatTeam;
-import info.mengnan.dialogerai.repository.enums.MemberRole;
 import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.server.param.auth.*;
 import info.mengnan.dialogerai.server.service.MemberService;
+import info.mengnan.dialogerai.server.param.team.MemberTeamContext;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.*;
+
+import java.nio.charset.StandardCharsets;
 
 import static info.mengnan.dialogerai.server.param.ErrorCode.*;
 
@@ -25,7 +26,10 @@ public class MemberController {
     public R register(@RequestBody RegisterRequest request) {
         if (StringUtils.isEmpty(request.getUsername()) || StringUtils.isEmpty(request.getPassword()))
             return R.error(MEMBER_NOT_FOUND);
+        if (StringUtils.isEmpty(request.getShareCode()))
+            return R.error(SHARE_CODE_REQUIRED);
 
+        request.setPassword(encryptPassword(request.getPassword()));
         memberService.register(request);
         return R.ok();
     }
@@ -35,7 +39,8 @@ public class MemberController {
         if (StringUtils.isEmpty(request.getUsername()) || StringUtils.isEmpty(request.getPassword()))
             return R.error(MEMBER_NOT_FOUND);
 
-        MemberResponse memberVO = memberService.authenticate(request.getUsername(), request.getPassword());
+        MemberResponse memberVO = memberService.authenticate(
+                request.getUsername(), encryptPassword(request.getPassword()));
         StpUtil.login(memberVO.getId());
         memberVO.setToken(StpUtil.getTokenValue());
         return R.ok(memberVO);
@@ -54,7 +59,7 @@ public class MemberController {
         if (member == null)
             return R.error(MEMBER_NOT_FOUND);
 
-        return R.ok(memberService.toMemberResponse(member));
+        return R.ok(memberService.buildMemberResponse(member));
     }
 
     @PutMapping("/update")
@@ -67,8 +72,9 @@ public class MemberController {
         if (StringUtils.isNotEmpty(request.getPassword())) {
             if (StringUtils.isEmpty(request.getOldPassword()))
                 return R.error(MEMBER_NOT_FOUND);
-            if (!memberService.matchesPassword(request.getOldPassword(), member.getPassword()))
+            if (!matchesPassword(request.getOldPassword(), member.getPassword()))
                 return R.error(MEMBER_OLD_PASSWORD_WRONG);
+            request.setPassword(encryptPassword(request.getPassword()));
         }
 
         memberService.updateMemberInfo(memberId, request);
@@ -90,22 +96,25 @@ public class MemberController {
     }
 
     private R requireOwner(Long ownerId, Long memberId) {
-        ChatMember owner = memberService.findById(ownerId);
-        if (owner == null || owner.getRole() != MemberRole.OWNER)
-            return R.error(MEMBER_MANAGE_DENIED);
-
-        ChatTeam team = memberService.findTeamByOwnerId(ownerId);
-        if (team == null)
+        MemberTeamContext ctx = memberService.resolveTeamContext(ownerId);
+        if (ctx == null || !ctx.isOwner())
             return R.error(MEMBER_MANAGE_DENIED);
         if (memberId == null)
             return null;
 
-        ChatMemberRelation relation = memberService.findRelationByMemberId(memberId);
-        if (relation == null || !team.getId().equals(relation.getTeamId()))
+        if (!memberService.isTeamMember(ctx, memberId))
             return R.error(MEMBER_MANAGE_DENIED);
 
         if (memberService.findById(memberId) == null)
             return R.error(MEMBER_NOT_FOUND);
         return null;
+    }
+
+    private boolean matchesPassword(String rawPassword, String encryptedPassword) {
+        return encryptPassword(rawPassword).equals(encryptedPassword);
+    }
+
+    static String encryptPassword(String password) {
+        return DigestUtils.md5DigestAsHex(password.getBytes(StandardCharsets.UTF_8));
     }
 }

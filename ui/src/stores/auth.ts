@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import type { MemberInfo } from '@/api/auth'
 import { MEMBER_ROLE } from '@/api/auth'
 import * as authApi from '@/api/auth'
+import { useConversationStore } from '@/stores/conversation'
 
 const TOKEN_KEY = 'token'
 const USER_KEY = 'user'
@@ -39,6 +40,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
+    useConversationStore().reset()
   }
 
   async function login(username: string, password: string) {

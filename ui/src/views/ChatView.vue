@@ -723,23 +723,22 @@ onMounted(async () => {
     console.error('拉取对话列表失败:', e)
   }
   await loadAgentOptions()
-  // 恢复当前选中的会话并拉取该对话历史
+  // 恢复当前选中的会话并拉取该对话历史；若持久化 session 不属于当前账号则清空选中态
   const sessionId = conv.getPersistedSessionId()
-  if (sessionId) {
-    const exists = conv.conversations.some((c) => c.id === sessionId)
-    if (exists) {
-      conv.setCurrent(sessionId)
-      try {
-        const res = await getHistory(sessionId)
-        if (res.success && res.data) {
-          const { messages, ragSourceMap, toolExecutionMap } = parseHistoryMessages(res.data)
-          conv.setMessages(sessionId, messages)
-          await attachMessageMeta(sessionId, messages, ragSourceMap, toolExecutionMap)
-        }
-      } catch (e) {
-        console.error('拉取对话历史失败:', e)
+  if (sessionId && conv.conversations.some((c) => c.id === sessionId)) {
+    conv.setCurrent(sessionId)
+    try {
+      const res = await getHistory(sessionId)
+      if (res.success && res.data) {
+        const { messages, ragSourceMap, toolExecutionMap } = parseHistoryMessages(res.data)
+        conv.setMessages(sessionId, messages)
+        await attachMessageMeta(sessionId, messages, ragSourceMap, toolExecutionMap)
       }
+    } catch (e) {
+      console.error('拉取对话历史失败:', e)
     }
+  } else {
+    conv.setCurrent(null)
   }
 })
 

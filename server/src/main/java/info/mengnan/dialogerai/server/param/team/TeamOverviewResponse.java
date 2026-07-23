@@ -7,6 +7,13 @@ import java.util.List;
 @Data
 public class TeamOverviewResponse {
 
+    private String teamName;
+
+    private Long defaultChatModelId;
+
+    /** 团队分享码（仅 Owner 可见） */
+    private String shareCode;
+
     private TeamMemberResponse owner;
 
     private List<TeamMemberResponse> members;

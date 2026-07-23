@@ -15,15 +15,16 @@ CREATE TABLE `chat_member`
     `nickname`   varchar(100)      DEFAULT NULL COMMENT '昵称',
     `phone`      varchar(20)       DEFAULT NULL COMMENT '手机号',
     `avatar`     varchar(500)      DEFAULT NULL COMMENT '头像URL',
-    `status`     int(11)           DEFAULT '1' COMMENT '状态: 1-正常, 0-禁用',
-    `role`       tinyint      NOT NULL DEFAULT '1' COMMENT '角色: 1-Owner, 2-Member',
+    `status`     tinyint      NOT NULL DEFAULT '1' COMMENT '账号状态: 1-正常, 0-禁用',
     `created_at` timestamp    NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` timestamp    NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    `deleted`    tinyint(1)        DEFAULT '0' COMMENT '逻辑删除',
-    PRIMARY KEY (`id`)
+    `deleted`    tinyint(1)   NOT NULL DEFAULT '0' COMMENT '逻辑删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_username` (`username`),
+    UNIQUE KEY `uk_phone` (`phone`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_0900_ai_ci COMMENT ='会员表';
+  COLLATE = utf8mb4_0900_ai_ci COMMENT ='会员账号表';
 
 -- ----------------------------
 -- Table structure for chat_team
@@ -31,31 +32,37 @@ CREATE TABLE `chat_member`
 DROP TABLE IF EXISTS `chat_team`;
 CREATE TABLE `chat_team`
 (
-    `id`         bigint(20) NOT NULL AUTO_INCREMENT COMMENT '团队ID',
-    `owner_id`   bigint(20) NOT NULL COMMENT '团队 Owner 的 member_id',
-    `name`       varchar(100)      DEFAULT NULL COMMENT '团队名称',
-    `created_at` timestamp  NULL     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `updated_at` timestamp  NULL     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `id`                    bigint(20) NOT NULL AUTO_INCREMENT COMMENT '团队ID',
+    `owner_id`              bigint(20) NOT NULL COMMENT '团队 Owner 的 member_id',
+    `name`                  varchar(100)      DEFAULT NULL COMMENT '团队名称',
+    `share_code`            varchar(32)       DEFAULT NULL COMMENT '团队分享码，用于注册绑定',
+    `default_chat_model_id` bigint(20)        DEFAULT NULL COMMENT '默认聊天模型ID',
+    `created_at`            timestamp  NULL     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at`            timestamp  NULL     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_owner_id` (`owner_id`)
+    UNIQUE KEY `uk_owner_id` (`owner_id`),
+    UNIQUE KEY `uk_share_code` (`share_code`),
+    KEY `idx_default_chat_model_id` (`default_chat_model_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci COMMENT ='团队表';
 
 -- ----------------------------
--- Table structure for chat_member_relation
+-- Table structure for chat_team_member
 -- ----------------------------
-DROP TABLE IF EXISTS `chat_member_relation`;
-CREATE TABLE `chat_member_relation`
+DROP TABLE IF EXISTS `chat_team_member`;
+CREATE TABLE `chat_team_member`
 (
     `id`         bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    `team_id`    bigint(20) NOT NULL COMMENT '所属团队ID',
-    `member_id`  bigint(20) NOT NULL COMMENT '团队成员 member_id',
-    `status`     int(11)           DEFAULT '1' COMMENT '状态: 1-正常, 0-禁用',
+    `team_id`    bigint(20) NOT NULL COMMENT '团队ID',
+    `member_id`  bigint(20) NOT NULL COMMENT '成员 member_id',
+    `role`       tinyint    NOT NULL COMMENT '团队角色: 1-Owner, 2-Member',
+    `status`     tinyint    NOT NULL DEFAULT '1' COMMENT '团队内状态: 1-正常, 0-禁用',
     `created_at` timestamp  NULL     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` timestamp  NULL     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_member_id` (`member_id`),
+    UNIQUE KEY `uk_team_member` (`team_id`, `member_id`),
     KEY `idx_team_id` (`team_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -73,8 +80,9 @@ CREATE TABLE `chat_api_key`
     `api_key`        varchar(500) NOT NULL COMMENT 'API Key',
     `model_name`     varchar(255) NOT NULL COMMENT '模型名称',
     `model_provider` varchar(255)          DEFAULT NULL COMMENT '模型提供商',
+    `description`    varchar(500)          DEFAULT NULL COMMENT '模型描述',
+    `enabled`        tinyint(1)            DEFAULT 1 COMMENT '是否启用（1启用 0禁用）',
     `base_url`       varchar(500)          DEFAULT NULL COMMENT 'API Base URL',
-    `default_chat` tinyint(1)   NOT NULL DEFAULT '0' COMMENT '是否为默认对话模型',
     `created_at`     timestamp    NULL     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at`     timestamp    NULL     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
@@ -429,3 +437,10 @@ CREATE TABLE `document_info`
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci COMMENT ='文档基础信息表';
+
+-- ----------------------------
+-- 已有库升级：为 chat_team 增加分享码字段（全新安装可忽略，建表语句已包含）
+-- ALTER TABLE `chat_team`
+--     ADD COLUMN `share_code` varchar(32) DEFAULT NULL COMMENT '团队分享码，用于注册绑定' AFTER `name`,
+--     ADD UNIQUE KEY `uk_share_code` (`share_code`);
+-- ----------------------------

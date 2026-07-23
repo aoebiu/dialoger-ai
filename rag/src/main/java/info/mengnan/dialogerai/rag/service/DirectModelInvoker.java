@@ -7,12 +7,12 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.input.Prompt;
-import info.mengnan.dialogerai.common.param.ModelType;
-import info.mengnan.dialogerai.rag.config.DefaultModelConfig;
 import info.mengnan.dialogerai.rag.config.ModelConfig;
+import info.mengnan.dialogerai.rag.container.factory.ChatModelFactory;
 import info.mengnan.dialogerai.rag.container.factory.UniversalModelFactory;
 import info.mengnan.dialogerai.rag.container.factory.ModelTypeMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.Base64;
 import java.util.Map;
@@ -25,34 +25,24 @@ import java.util.function.Supplier;
 @Slf4j
 public class DirectModelInvoker {
 
-    private final UniversalModelFactory modelFactory;
-    private final SingleModelConfigProvider singleModelConfigProvider;
-    private final DefaultDirectChatModelNameProvider defaultDirectChatModelNameProvider;
     private final PromptTemplateManager promptTemplateManager;
-    private final DefaultModelConfig defaultModelConfig;
+    private final ChatModelFactory modelFactory;
 
     // 重试配置
     private static final int MAX_ATTEMPTS = 3;
     private static final long BACKOFF_DELAY_MS = 1000L;
     private static final double BACKOFF_MULTIPLIER = 2.0;
 
-    public DirectModelInvoker(UniversalModelFactory modelFactory,
-                              SingleModelConfigProvider singleModelConfigProvider,
-                              DefaultDirectChatModelNameProvider defaultDirectChatModelNameProvider,
-                              PromptTemplateManager promptTemplateManager,
-                              DefaultModelConfig defaultModelConfig) {
-        this.modelFactory = modelFactory;
-        this.singleModelConfigProvider = singleModelConfigProvider;
-        this.defaultDirectChatModelNameProvider = defaultDirectChatModelNameProvider;
+    public DirectModelInvoker(PromptTemplateManager promptTemplateManager,ChatModelFactory chatModelFactory) {
         this.promptTemplateManager = promptTemplateManager;
-        this.defaultModelConfig = defaultModelConfig;
+        this.modelFactory = chatModelFactory;
     }
 
     /**
-     * @param ownerId 资源归属 ownerId，用于解析团队默认 direct chat 模型
+     * @param memberId     当时调用的模型的memberId
      * @param invokeSource 业务来源标识，便于排查；为 null 时使用 {@code template:模板名}
      */
-    public String directInvoke(Long ownerId, String invokeSource, String templateName, Map<String, Object> variables) {
+    public String directInvoke(Long memberId, String invokeSource, String templateName, Map<String, Object> variables,ModelConfig modelConfig) {
         if (templateName == null) {
             log.error("No template name provided");
             throw new IllegalArgumentException("No template name provided");
@@ -61,39 +51,25 @@ public class DirectModelInvoker {
         String source = (invokeSource != null && !invokeSource.isBlank())
                 ? invokeSource
                 : ("template:" + templateName);
-        return directInvokeInternal(ownerId, source, templateName, prompt.text());
+        return directInvokeInternal(memberId, source, templateName, prompt.text(), modelConfig);
     }
 
     /**
-     * @param ownerId 资源归属 ownerId，用于解析团队默认 direct chat 模型
+     *  @param memberId    当时调用的模型的memberId
      * @param invokeSource 业务来源标识，便于排查
      */
-    public String directInvokeRaw(Long ownerId, String invokeSource, String promptText) {
-        String source = (invokeSource != null && !invokeSource.isBlank()) ? invokeSource : "unknown";
-        return directInvokeInternal(ownerId, source, null, promptText);
+    public String directInvokeRaw(Long memberId, String invokeSource, String promptText,ModelConfig modelConfig) {
+        String source = StringUtils.isNotEmpty(invokeSource) ? invokeSource : "unknown";
+        return directInvokeInternal(memberId, source, null, promptText, modelConfig);
     }
 
-    private String directInvokeInternal(Long ownerId, String invokeSource, String templateName, String promptText) {
-        ModelConfig modelConfig = null;
+    private String directInvokeInternal(Long memberId, String invokeSource, String templateName, String promptText, ModelConfig modelConfig) {
+        ChatModel chatModel = modelFactory.createChatModel(modelConfig);
         try {
-            String modelName = defaultDirectChatModelNameProvider.findDefaultDirectChatModelName(ownerId);
-            if (modelName == null || modelName.isBlank()) {
-                log.warn("No default direct chat model for ownerId={}, fallback to configured default", ownerId);
-                return null;
-            }
-            modelConfig = singleModelConfigProvider.findModel(ownerId, modelName, ModelType.CHAT);
-            if (modelConfig == null) {
-                throw new IllegalArgumentException("No default model configuration found");
-            }
-
-            ChatModel chatModel = getModel(modelConfig, ChatModel.class);
-
-            String response = executeWithRetry(() -> {
+            return executeWithRetry(() -> {
                 String raw = chatModel.chat(promptText);
                 return UserMessage.from(raw).singleText();
             }, MAX_ATTEMPTS, BACKOFF_DELAY_MS, BACKOFF_MULTIPLIER);
-
-            return response;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -131,13 +107,7 @@ public class DirectModelInvoker {
      * @return 图片内容的文本描述
      */
     private String imageToTextFromBase64(String base64ImageData, String promptTemplate, String mimeType) {
-        ModelConfig modelConfig = singleModelConfigProvider.findModel(null, defaultModelConfig.getModelName(), ModelType.CHAT);
-        if (modelConfig == null) {
-            throw new IllegalArgumentException("No default image model configuration found");
-        }
-
         Prompt prompt = promptTemplateManager.createPrompt(promptTemplate, null);
-        ChatModel chatModel = getModel(modelConfig, ChatModel.class);
 
         UserMessage userMessage = UserMessage.from(
                 TextContent.from(prompt.text()),
@@ -148,8 +118,9 @@ public class DirectModelInvoker {
         return executeWithRetry(() -> {
             ChatRequest.Builder requestBuilder = ChatRequest.builder().messages(userMessage);
             ChatRequest request = requestBuilder.build();
-            ChatResponse response = chatModel.chat(request);
-            return response.aiMessage().text();
+//            ChatResponse response = chatModel.chat(request);
+//            return response.aiMessage().text();
+            return "";
         }, MAX_ATTEMPTS, BACKOFF_DELAY_MS, BACKOFF_MULTIPLIER);
     }
 
@@ -201,15 +172,5 @@ public class DirectModelInvoker {
                     "Operation failed after %d attempts. Last error: %s", maxAttempts, lastException.getMessage()), lastException);
         }
         throw new RuntimeException();
-    }
-
-    public <T> T getModel(ModelConfig modelConfig, Class<T> modelClass) {
-        try {
-            ModelTypeMapper mapper = ModelTypeMapper.findByClass(modelClass);
-            return mapper.create(modelFactory, modelConfig);
-        } catch (Exception e) {
-            log.error("Failed to create model: {}", modelConfig.getModelName(), e);
-            throw new RuntimeException("Failed to create model: " + e.getMessage(), e);
-        }
     }
 }

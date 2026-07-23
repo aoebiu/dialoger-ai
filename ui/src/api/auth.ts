@@ -33,6 +33,7 @@ export interface RegisterRequest {
   password: string
   nickname?: string
   phone?: string
+  shareCode: string
 }
 
 export async function login(body: LoginRequest) {

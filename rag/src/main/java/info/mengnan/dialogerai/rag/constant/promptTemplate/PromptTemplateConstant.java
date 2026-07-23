@@ -40,12 +40,12 @@ public class PromptTemplateConstant {
 
     public static final PromptTemplate TITLE_GENERATION_PROMPT_TEMPLATE = PromptTemplate.from("""
             Generate a concise title that summarizes the following content.
-            The title must be in the same language as the provided content.
+            The title must be in the primary language of the conversation, not necessarily the language of the provided content if they differ.
             Ensure the title is under 10 words and captures the main essence.
-
+            
             Content:
             {{query}}
-
+            
             Title:
             """
     );
@@ -54,6 +54,16 @@ public class PromptTemplateConstant {
             Please analyze this image and describe in detail what you see.
             """
     );
+
+    /**
+     * 默认系统提示词 - 当未定义自定义系统提示词时使用
+     */
+    public static final String DEFAULT_SYSTEM_PROMPT = """
+            As a professional AI assistant, please answer user questions in a concise and accurate manner based on the provided reference information.
+            Do not directly recite the reference information; instead, integrate its content into a clear and natural response.
+            If the reference information is insufficient to answer the question, please state it truthfully and proactively call tools.
+            Maintain the continuity of the conversation, ensuring all interactions are professional, safe, and reliable.
+            """;
 
     /**
      * 分析用户提示词，判断工具需要哪些运行时能力（HTTP请求、配置读取等）

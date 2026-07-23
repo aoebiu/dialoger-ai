@@ -39,6 +39,7 @@ import info.mengnan.dialogerai.rag.injector.RagSourceStore;
 import info.mengnan.dialogerai.tool.ToolExecutionStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.HashMap;
 import java.util.List;
@@ -127,6 +128,10 @@ public class ChatService {
             if (!assembledModels.getRag()) {
                 return this;
             }
+            QueryRouter queryRouter = createQueryRouter(assembledModels.getConfigs(), kbContexts, embeddingStoreRegistry);
+            if (queryRouter == null) {
+                return this;
+            }
             aiServices.storeRetrievedContentInChatMemory(false);
             DefaultRetrievalAugmentor.DefaultRetrievalAugmentorBuilder ragBuilder = DefaultRetrievalAugmentor.builder();
             ragBuilder.executor(ragExecutor);
@@ -138,7 +143,7 @@ public class ChatService {
                 ragBuilder.queryTransformer(new DefaultQueryTransformer());
             }
 
-            ragBuilder.queryRouter(createQueryRouter(assembledModels.getConfigs(), kbContexts, embeddingStoreRegistry));
+            ragBuilder.queryRouter(queryRouter);
             ragBuilder.contentInjector(new CapturingContentInjector(sessionId, ragSourceStore));
             aiServices.retrievalAugmentor(ragBuilder.build());
             return this;
@@ -198,8 +203,8 @@ public class ChatService {
 
         private AssistantUniqueBuilder configureSystemPrompt(AssembledModels assembledModels) {
             String systemPrompt = assembledModels.getSystemPrompt();
-            if (systemPrompt == null || systemPrompt.isBlank()) {
-                return this;
+            if (StringUtils.isEmpty(systemPrompt)) {
+                systemPrompt = DEFAULT_SYSTEM_PROMPT;
             }
             String prompt = systemPrompt.trim();
             aiServices.systemMessageTransformer(current -> prompt);
@@ -228,7 +233,8 @@ public class ChatService {
         private QueryRouter createQueryRouter(Map<ModelType, ModelConfig> configs,
                                               List<? extends KbContext> kbContexts,
                                               DynamicEmbeddingStoreRegistry embeddingStoreRegistry) {
-            EmbeddingModel embeddingModel = modelFactory.createEmbeddingModel(configs.get(EMBEDDING));
+            ModelConfig embeddingModelConfig = configs.get(EMBEDDING);
+            EmbeddingModel embeddingModel = modelFactory.createEmbeddingModel(embeddingModelConfig);
             if (embeddingModel == null) {
                 log.warn("Failed to create embedding model");
                 return new DefaultQueryRouter();
@@ -245,7 +251,7 @@ public class ChatService {
                             HashMap::putAll
                     );
             if (retrieverToKbName.isEmpty()) {
-                return new DefaultQueryRouter();
+                return null;
             }
             ChatModel chatModel = modelFactory.createChatModel(configs.get(CHAT));
             if (chatModel == null) {

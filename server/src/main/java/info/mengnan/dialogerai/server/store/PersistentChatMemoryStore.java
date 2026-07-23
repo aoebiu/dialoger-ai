@@ -6,16 +6,20 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
+import info.mengnan.dialogerai.rag.config.ModelConfig;
 import info.mengnan.dialogerai.rag.service.DirectModelInvoker;
 import info.mengnan.dialogerai.repository.entity.ChatMessage;
 import info.mengnan.dialogerai.repository.entity.ChatMessageExtras;
 import info.mengnan.dialogerai.repository.entity.ChatSession;
 import info.mengnan.dialogerai.repository.repo.ChatMessageRepository;
 import info.mengnan.dialogerai.rag.injector.RagSourceStore;
+import info.mengnan.dialogerai.server.param.team.MemberTeamContext;
 import info.mengnan.dialogerai.server.service.ChatSessionService;
 import info.mengnan.dialogerai.server.service.MemberService;
+import info.mengnan.dialogerai.server.service.ModelConfigService;
 import info.mengnan.dialogerai.tool.ToolExecutionStore;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -26,6 +30,7 @@ import static info.mengnan.dialogerai.common.param.MessageRole.*;
 import static info.mengnan.dialogerai.rag.config.DefaultModelConfig.DEFAULT_SESSION;
 import static info.mengnan.dialogerai.server.param.chat.ChatSessionResponse.DEFAULT_TITLE;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class PersistentChatMemoryStore implements ChatMemoryStore {
@@ -35,6 +40,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     private final ToolExecutionStore toolExecutionStore;
     private final ChatSessionService chatSessionService;
     private final MemberService memberService;
+    private final ModelConfigService modelConfigService;
     private final DirectModelInvoker directModelInvoker;
 
     @Override
@@ -131,10 +137,25 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         }
         if (textList.size() < 2) return;
 
+        MemberTeamContext ctx = memberService.resolveTeamContext(chatSession.getMemberId());
+        if (ctx == null) {
+            log.warn("Skip title generation:iteam context not found, memberId={}", chatSession.getMemberId());
+            return;
+        }
+
+        ModelConfig modelConfig = modelConfigService.findModelById(ctx.defaultChatModelId());
+        if (modelConfig == null) {
+            log.warn("Skip title generation: default chat model not configured, teamId={}", ctx.teamId());
+            return;
+        }
+
         Map<String, Object> params = Map.of("query", textList);
-        Long ownerId = memberService.resolveResourceOwnerId(chatSession.getMemberId());
-        String title = directModelInvoker.directInvoke(ownerId, "conversations.titleGeneration",
-                "title_generation", params);
+        String title = directModelInvoker.directInvoke(
+                ctx.ownerId(),
+                "conversations.titleGeneration",
+                "title_generation",
+                params,
+                modelConfig);
         chatSessionService.updateChatTitle(chatSession.getChatSessionId(), title);
     }
 

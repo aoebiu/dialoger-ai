@@ -1,13 +1,14 @@
-import { $get, $post, $put, $delete } from './request'
+import { $get, $post, $delete, $put } from './request'
 
 export interface ModelApiKeyItem {
   id: number
   modelName: string
   modelProvider: string
   keyType: string
+  description?: string
+  enabled: boolean
   maskedApiKey: string
   createdAt: string | null
-  defaultDirectChat: boolean
 }
 
 export function getModelKeyList() {
@@ -19,12 +20,16 @@ export function createModelKey(params: {
   modelProvider: string
   keyType: string
   apiKey: string
+  description?: string
 }) {
   const search = new URLSearchParams()
   search.set('modelName', params.modelName)
   search.set('modelProvider', params.modelProvider)
   search.set('keyType', params.keyType)
   search.set('apiKey', params.apiKey)
+  if (params.description) {
+    search.set('description', params.description)
+  }
   return $post<ModelApiKeyItem>(`/model/create?${search.toString()}`)
 }
 
@@ -32,12 +37,8 @@ export function deleteModelKey(id: number) {
   return $delete(`/model/${id}`)
 }
 
-export function setDefaultDirectChatModel(id: number) {
-  return $put<ModelApiKeyItem[]>(`/model/${id}/directChat`)
-}
-
-export function clearDefaultDirectChatModel(id: number) {
-  return $delete<ModelApiKeyItem[]>(`/model/${id}/directChat`)
+export function toggleModelKeyEnabled(id: number) {
+  return $put<ModelApiKeyItem>(`/model/${id}/toggle`)
 }
 
 export type ParamValueType =

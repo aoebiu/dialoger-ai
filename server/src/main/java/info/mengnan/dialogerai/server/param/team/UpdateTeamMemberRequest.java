@@ -6,7 +6,6 @@ import lombok.Data;
 @Data
 public class UpdateTeamMemberRequest {
 
-    /** Controller 写入，非客户端提交 */
     private Long id;
 
     private String nickname;

@@ -67,10 +67,11 @@ public class OpenAiCompatibleController {
         ChatProjectApiKey projectApiKey = projectApiKeyService.findByApiKey(apiKey);
         chatRequest.setMemberId(projectApiKey.getMemberId());
 
-        Long ownerId = memberService.resolveResourceOwnerId(chatRequest.getMemberId());
-        String defaultModelName = modelConfigService.findDefaultDirectChatModelName(ownerId);
-        if (defaultModelName == null || defaultModelName.isBlank())
-            return Flux.error(new IllegalArgumentException(MODEL_DEFAULT_REQUIRED.getMessage()));
+//        MemberTeamContext ctx = memberService.resolveTeamContext(chatRequest.getMemberId());
+//        Long ownerId = ctx.ownerId();
+//        String defaultModelName = modelConfigService.findDefaultDirectChatModelName(ownerId);
+//        if (defaultModelName == null || defaultModelName.isBlank())
+//            return Flux.error(new IllegalArgumentException(MODEL_DEFAULT_REQUIRED.getMessage()));
 
         try {
             return streamResponse(chatRequest, request.getModel());

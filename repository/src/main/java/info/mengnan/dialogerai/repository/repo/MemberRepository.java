@@ -23,6 +23,7 @@ public class MemberRepository {
     }
 
     public List<ChatMember> findByIds(List<Long> ids) {
+        if (ids.isEmpty()) return List.of();
         Map<Long, ChatMember> memberMap = mapper.selectBatchIds(ids).stream()
                 .collect(Collectors.toMap(ChatMember::getId, Function.identity()));
         return ids.stream()

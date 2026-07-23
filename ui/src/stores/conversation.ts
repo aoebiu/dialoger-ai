@@ -148,6 +148,16 @@ export const useConversationStore = defineStore('conversation', () => {
     conversations.value = list
   }
 
+  /** 退出登录 / 切换账号时清空内存与持久化的会话状态，避免串号 */
+  function reset() {
+    conversations.value = []
+    currentId.value = null
+    messagesCache.value = {}
+    try {
+      localStorage.removeItem(STORAGE_KEY_SESSION)
+    } catch {}
+  }
+
   /** 刷新页面后用于恢复的 sessionId（从 localStorage 读取） */
   function getPersistedSessionId(): string | null {
     try {
@@ -173,6 +183,7 @@ export const useConversationStore = defineStore('conversation', () => {
     patchMessage,
     removeConversation,
     setConversations,
+    reset,
     getPersistedSessionId,
   }
 })
