@@ -396,7 +396,7 @@
               <h1 class="page-title">账号管理</h1>
               <p class="page-desc">
                 <template v-if="auth.isOwner">
-                  查看团队账号结构，管理您的 Member 成员。
+                  查看团队账号结构，管理 Member，并可生成分享码供他人注册加入。
                 </template>
                 <template v-else>
                   查看当前团队信息，Member 共享 Owner 的模型配置与资源。
@@ -423,6 +423,17 @@
                 </button>
               </div>
             <div class="data-table-panel" :class="{ 'is-loading': loadingMemberList }">
+              <div class="team-block-header">
+                <span class="team-block-name">{{ teamOverview?.teamName || '未命名团队' }}</span>
+                <button
+                  v-if="auth.isOwner"
+                  type="button"
+                  class="team-edit-btn"
+                  @click="openEditTeamModal"
+                >
+                  编辑团队
+                </button>
+              </div>
               <div v-if="loadingMemberList" class="data-table-loading-overlay" aria-busy="true" aria-live="polite">
                 <div class="data-table-loading-backdrop" />
                 <div class="data-table-loading-content">
@@ -552,6 +563,69 @@
                 <button type="button" class="btn-cancel" @click="closeAddAccountModal">取消</button>
                 <button type="button" class="btn-confirm" :disabled="addingAccount" @click="submitAddAccount">
                   {{ addingAccount ? '添加中...' : '确定' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 编辑团队弹窗 -->
+          <div v-if="showEditTeamModal" class="modal-overlay">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h2 class="modal-title">编辑团队</h2>
+                <button type="button" class="modal-close" @click="closeEditTeamModal">×</button>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  <label class="form-label">团队名称 <span class="required">*</span></label>
+                  <input
+                    v-model="editTeamForm.name"
+                    type="text"
+                    class="form-input"
+                    placeholder="请输入团队名称"
+                  />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">默认对话模型</label>
+                  <select v-model="editTeamForm.defaultChatModelId" class="form-input">
+                    <option :value="null">不设置</option>
+                    <option
+                      v-for="m in modelKeyList.filter(k => k.keyType === 'chat')"
+                      :key="m.id"
+                      :value="m.id"
+                    >
+                      {{ m.modelName }}（{{ m.modelProvider }}）
+                    </option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">分享码</label>
+                  <div class="share-code-field">
+                    <code class="share-code-value">{{ editTeamForm.shareCode || '未生成' }}</code>
+                    <button
+                      v-if="editTeamForm.shareCode"
+                      type="button"
+                      class="secondary-action-btn"
+                      @click="copyShareCode"
+                    >
+                      复制
+                    </button>
+                    <button
+                      type="button"
+                      class="secondary-action-btn"
+                      @click="onGenerateShareCode"
+                    >
+                      {{ editTeamForm.shareCode ? '重新生成' : '生成分享码' }}
+                    </button>
+                  </div>
+                  <p class="form-hint">分享码不可手动编辑；点击生成后需点「确定」才会保存生效。</p>
+                </div>
+                <p v-if="editTeamError" class="form-error">{{ editTeamError }}</p>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn-cancel" @click="closeEditTeamModal">取消</button>
+                <button type="button" class="btn-confirm" :disabled="editTeamSaving" @click="submitEditTeam">
+                  {{ editTeamSaving ? '保存中...' : '确定' }}
                 </button>
               </div>
             </div>
@@ -704,7 +778,7 @@
           <div class="section-header-bar">
             <div class="section-header-info">
               <h1 class="page-title">模型配置</h1>
-              <p class="page-desc">配置第三方模型的 API Key，支持 OpenAI、Anthropic、DeepSeek 等模型提供商。Owner 可将 chat 类型模型设为团队默认对话模型。</p>
+              <p class="page-desc">配置第三方模型的 API Key，支持 OpenAI、Anthropic、DeepSeek 等模型提供商。</p>
             </div>
             <div class="section-header-actions">
               <button v-if="auth.isOwner" type="button" class="primary-action-btn" @click="showCreateModelModal = true">
@@ -734,65 +808,58 @@
                 </div>
               </div>
               <div v-else-if="modelKeyList.length > 0" class="table-scroll-x">
-                <div class="account-list model-list">
-                <div class="list-header">
-                  <span>模型名称</span>
-                  <span>提供商</span>
-                  <span>类型</span>
-                  <span>默认对话</span>
-                  <span>Key</span>
-                  <span>创建时间</span>
-                  <span>操作</span>
-                </div>
-                <div
-                  v-for="item in modelKeyList"
-                  :key="item.id"
-                  class="account-item model-item"
-                >
-                  <div class="account-info model-info">
-                    <span class="model-name">{{ item.modelName }}</span>
-                    <span class="model-provider-tag" :class="providerClass(item.modelProvider)">{{ item.modelProvider }}</span>
-                    <span class="model-type-tag" :class="keyTypeClass(item.keyType)">{{ keyTypeLabel(item.keyType) }}</span>
-                    <span class="model-default-cell">
-                      <button
-                        v-if="item.defaultDirectChat && auth.isOwner"
-                        type="button"
-                        class="default-toggle-btn"
-                        :disabled="settingDefaultModelId === item.id"
-                        @click="clearDefaultDirectChat(item)"
-                      >
-                        <span class="default-toggle-label is-default">
-                          {{ settingDefaultModelId === item.id ? '取消中…' : '默认' }}
+                <table class="model-table">
+                  <thead>
+                    <tr>
+                      <th>模型名称</th>
+                      <th>提供商</th>
+                      <th>类型</th>
+                      <th>描述</th>
+                      <th>Key</th>
+                      <th>状态</th>
+                      <th>创建时间</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in modelKeyList" :key="item.id">
+                      <td class="col-model-name">{{ item.modelName }}</td>
+                      <td class="col-provider">
+                        <span class="model-provider-tag" :class="providerClass(item.modelProvider)">{{ item.modelProvider }}</span>
+                      </td>
+                      <td class="col-type">
+                        <span class="model-type-tag" :class="keyTypeClass(item.keyType)">{{ keyTypeLabel(item.keyType) }}</span>
+                      </td>
+                      <td class="col-description">{{ item.description || '-' }}</td>
+                      <td class="col-key">{{ item.maskedApiKey }}</td>
+                      <td class="col-status">
+                        <span class="model-status-badge" :class="{ 'is-enabled': item.enabled, 'is-disabled': !item.enabled }">
+                          {{ item.enabled ? '上线' : '下线' }}
                         </span>
-                        <span class="default-toggle-label is-cancel">取消默认</span>
-                      </button>
-                      <span v-else-if="item.defaultDirectChat" class="default-chat-badge">默认</span>
-                      <button
-                        v-else-if="auth.isOwner && item.keyType === 'chat'"
-                        type="button"
-                        class="set-default-btn"
-                        :disabled="settingDefaultModelId === item.id"
-                        @click="setDefaultDirectChat(item)"
-                      >
-                        {{ settingDefaultModelId === item.id ? '设置中…' : '设为默认' }}
-                      </button>
-                      <span v-else class="model-default-empty">—</span>
-                    </span>
-                    <span class="apikey-masked">{{ item.maskedApiKey }}</span>
-                    <span class="apikey-meta">{{ formatDate(item.createdAt) }}</span>
-                  </div>
-                  <div class="upload-actions">
-                    <button
-                      v-if="auth.isOwner"
-                      type="button"
-                      class="delete-btn"
-                      @click="confirmDeleteModelKey(item)"
-                    >
-                      删除
-                    </button>
-                  </div>
-                </div>
-                </div>
+                      </td>
+                      <td class="col-time">{{ formatDate(item.createdAt) }}</td>
+                      <td class="col-actions">
+                        <button
+                          v-if="auth.isOwner"
+                          type="button"
+                          class="toggle-btn"
+                          :class="item.enabled ? 'btn-disable' : 'btn-enable'"
+                          @click="toggleModelKeyEnabledStatus(item)"
+                        >
+                          {{ item.enabled ? '下线' : '上线' }}
+                        </button>
+                        <button
+                          v-if="auth.isOwner"
+                          type="button"
+                          class="delete-btn"
+                          @click="confirmDeleteModelKey(item)"
+                        >
+                          删除
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
               <p v-else class="table-empty">{{ auth.isOwner ? '暂无模型配置，点击上方按钮添加' : '暂无模型配置' }}</p>
             </div>
@@ -833,12 +900,25 @@
                   />
                 </div>
                 <div class="form-group">
-                  <label class="form-label">类型</label>
+                  <label class="form-label">模型类型 <span class="required">*</span></label>
                   <select v-model="createModelForm.keyType" class="form-input">
-                    <option value="chat">对话（chat）</option>
-                    <option value="streaming_chat">流式对话（streaming_chat）</option>
-                    <option value="embedding">嵌入模型（embedding）</option>
+                    <option value="" disabled>请选择模型类型</option>
+                    <option value="chat">对话（CHAT）</option>
+                    <option value="streaming_chat">流式对话（STREAMING_CHAT）</option>
+                    <option value="embedding">嵌入模型（EMBEDDING）</option>
+                    <option value="scoring">评分模型（SCORING）</option>
+                    <option value="moderation">审核模型（MODERATION）</option>
+                    <option value="image">图像模型（IMAGE）</option>
                   </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">模型描述（可选）</label>
+                  <textarea
+                    v-model="createModelForm.description"
+                    class="form-input form-textarea"
+                    rows="3"
+                    placeholder="请输入模型描述，如参数范围、能力说明等（至少支持80字）"
+                  />
                 </div>
                 <div class="form-group">
                   <label class="form-label">API Key <span class="required">*</span></label>
@@ -869,7 +949,7 @@
               <p class="page-desc">管理 AI 对话中可调用的工具/函数，定义工具的参数、描述和执行脚本。</p>
             </div>
             <div class="section-header-actions">
-              <button type="button" class="primary-action-btn" @click="router.push({ name: 'functionCallCreate' })">
+              <button type="button" class="primary-action-btn" @click="goCreateFunctionCall">
                 + 添加工具
               </button>
             </div>
@@ -972,6 +1052,7 @@ import {
   getTeamOverview,
   createTeamMember,
   updateTeamMember,
+  updateTeam,
   disableTeamMember,
   roleBadgeClass,
   roleLabel,
@@ -981,7 +1062,7 @@ import {
 import type { TeamMember, TeamOverview } from '@/api/team'
 import { getApiKeyList, createApiKey, disableApiKey, deleteApiKey } from '@/api/apikey'
 import type { ApiKeyListItem, CreateApiKeyResult } from '@/api/apikey'
-import { getModelKeyList, createModelKey, deleteModelKey, setDefaultDirectChatModel, clearDefaultDirectChatModel } from '@/api/model'
+import { getModelKeyList, createModelKey, deleteModelKey, toggleModelKeyEnabled } from '@/api/model'
 import type { ModelApiKeyItem } from '@/api/model'
 import { getFunctionCallList, deleteFunctionCall } from '@/api/functioncall'
 import type { FunctionCallItem } from '@/api/functioncall'
@@ -1045,11 +1126,19 @@ const bizConfigPairs = ref<BizConfigPairRow[]>([{ key: '', value: '' }])
 const teamOverview = ref<TeamOverview | null>(null)
 const showAddAccountModal = ref(false)
 const showEditAccountModal = ref(false)
+const showEditTeamModal = ref(false)
 const addingAccount = ref(false)
 const editingAccountSaving = ref(false)
+const editTeamSaving = ref(false)
 const addAccountError = ref('')
 const editAccountError = ref('')
+const editTeamError = ref('')
 const editingAccount = ref<TeamMember | null>(null)
+const editTeamForm = ref<{ name: string; defaultChatModelId: number | null; shareCode: string }>({
+  name: '',
+  defaultChatModelId: null,
+  shareCode: '',
+})
 const addAccountForm = ref({
   username: '',
   password: '',
@@ -1086,7 +1175,6 @@ const newKeyResult = ref<CreateApiKeyResult | null>(null)
 
 // 模型配置相关
 const modelKeyList = ref<ModelApiKeyItem[]>([])
-const settingDefaultModelId = ref<number | null>(null)
 const showCreateModelModal = ref(false)
 const creatingModelKey = ref(false)
 const createModelError = ref('')
@@ -1095,6 +1183,7 @@ const createModelForm = ref({
   modelProvider: '',
   customProvider: '',
   keyType: 'chat',
+  description: '',
   apiKey: '',
 })
 const providerOptions = ['OpenAI', 'Anthropic', 'DeepSeek', 'Ollama', '自定义']
@@ -1178,6 +1267,78 @@ function closeAddAccountModal() {
     phone: '',
   }
   addAccountError.value = ''
+}
+
+function openEditTeamModal() {
+  editTeamForm.value = {
+    name: teamOverview.value?.teamName ?? '',
+    defaultChatModelId: teamOverview.value?.defaultChatModelId ?? null,
+    shareCode: teamOverview.value?.shareCode ?? '',
+  }
+  editTeamError.value = ''
+  showEditTeamModal.value = true
+  if (modelKeyList.value.length === 0) loadModelKeyList()
+}
+
+function createLocalShareCode() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+  }
+  return Array.from({ length: 12 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+}
+
+function onGenerateShareCode() {
+  if (editTeamForm.value.shareCode) {
+    const ok = window.confirm('重新生成后，点击「确定」保存才会生效；取消关闭弹窗则不会写入。确定继续？')
+    if (!ok) return
+  }
+  editTeamForm.value = {
+    ...editTeamForm.value,
+    shareCode: createLocalShareCode(),
+  }
+}
+
+async function copyShareCode() {
+  const code = editTeamForm.value.shareCode
+  if (!code) return
+  try {
+    await navigator.clipboard.writeText(code)
+    toastSuccess('分享码已复制')
+  } catch {
+    toastError('复制失败，请手动复制')
+  }
+}
+
+function closeEditTeamModal() {
+  showEditTeamModal.value = false
+}
+
+async function submitEditTeam() {
+  if (!editTeamForm.value.name.trim()) {
+    editTeamError.value = '团队名称不能为空'
+    return
+  }
+  editTeamSaving.value = true
+  editTeamError.value = ''
+  try {
+    const shareCode = editTeamForm.value.shareCode.trim()
+    const res = await updateTeam({
+      name: editTeamForm.value.name.trim(),
+      defaultChatModelId: editTeamForm.value.defaultChatModelId,
+      ...(shareCode ? { shareCode } : {}),
+    })
+    if (res.success) {
+      await loadTeamOverview()
+      closeEditTeamModal()
+      toastSuccess(shareCode ? '团队信息与分享码已保存' : '团队信息已更新')
+    } else {
+      editTeamError.value = res.message ?? '保存失败'
+    }
+  } catch (e: unknown) {
+    editTeamError.value = e instanceof Error ? e.message : '保存失败'
+  } finally {
+    editTeamSaving.value = false
+  }
 }
 
 function openEditAccountModal(account: TeamMember) {
@@ -1623,6 +1784,7 @@ function closeCreateModelModal() {
     modelProvider: '',
     customProvider: '',
     keyType: 'chat',
+    description: '',
     apiKey: '',
   }
   createModelError.value = ''
@@ -1644,6 +1806,10 @@ async function submitCreateModelKey() {
     createModelError.value = '请选择或输入模型提供商'
     return
   }
+  if (!createModelForm.value.keyType) {
+    createModelError.value = '请选择模型类型'
+    return
+  }
   if (!createModelForm.value.apiKey.trim()) {
     createModelError.value = '请输入 API Key'
     return
@@ -1656,6 +1822,7 @@ async function submitCreateModelKey() {
       modelProvider: provider,
       keyType: createModelForm.value.keyType,
       apiKey: createModelForm.value.apiKey.trim(),
+      description: createModelForm.value.description.trim() || undefined,
     })
     if (res.success) {
       closeCreateModelModal()
@@ -1678,44 +1845,26 @@ async function deleteModelKeyById(id: number) {
   try {
     await deleteModelKey(id)
     modelKeyList.value = modelKeyList.value.filter((k) => k.id !== id)
+    toastSuccess('删除成功')
   } catch (e: any) {
     toastError(e.message || '删除失败')
   }
 }
 
-async function setDefaultDirectChat(item: ModelApiKeyItem) {
-  if (item.keyType !== 'chat' || item.defaultDirectChat)
-    return
-
-  settingDefaultModelId.value = item.id
+async function toggleModelKeyEnabledStatus(item: ModelApiKeyItem) {
   try {
-    const res = await setDefaultDirectChatModel(item.id)
-    if (res.success && Array.isArray(res.data)) {
-      modelKeyList.value = res.data
-      toastSuccess('已设为默认对话模型')
+    const res = await toggleModelKeyEnabled(item.id)
+    if (res.success && res.data) {
+      const index = modelKeyList.value.findIndex((k) => k.id === item.id)
+      if (index !== -1) {
+        modelKeyList.value[index] = res.data
+      }
+      toastSuccess(res.data.enabled ? '模型已上线' : '模型已下线')
+    } else {
+      toastError(res.message || '操作失败')
     }
-  } catch (e: unknown) {
-    toastError(e instanceof Error ? e.message : '设置失败')
-  } finally {
-    settingDefaultModelId.value = null
-  }
-}
-
-async function clearDefaultDirectChat(item: ModelApiKeyItem) {
-  if (!item.defaultDirectChat)
-    return
-
-  settingDefaultModelId.value = item.id
-  try {
-    const res = await clearDefaultDirectChatModel(item.id)
-    if (res.success && Array.isArray(res.data)) {
-      modelKeyList.value = res.data
-      toastSuccess('已取消默认对话模型')
-    }
-  } catch (e: unknown) {
-    toastError(e instanceof Error ? e.message : '取消失败')
-  } finally {
-    settingDefaultModelId.value = null
+  } catch (e: any) {
+    toastError(e.message || '操作失败')
   }
 }
 
@@ -1760,6 +1909,14 @@ function formatFileSize(size: number): string {
 }
 
 // Function Call 相关方法
+async function goCreateFunctionCall() {
+  try {
+    await router.push({ name: 'functionCallCreate' })
+  } catch (e: unknown) {
+    toastError(e instanceof Error ? e.message : '无法打开新建工具页，请刷新后重试')
+  }
+}
+
 async function loadFunctionCallList() {
   loadingFunctionCallList.value = true
   try {
@@ -1793,6 +1950,7 @@ function keyTypeLabel(keyType: string): string {
   if (keyType === 'embedding') return '嵌入模型'
   if (keyType === 'moderation') return '审核'
   if (keyType === 'scoring') return '评分'
+  if (keyType === 'image') return '图像'
   return keyType
 }
 
@@ -1813,6 +1971,7 @@ function keyTypeClass(keyType: string): string {
   if (keyType === 'embedding') return 'type-embedding'
   if (keyType === 'moderation') return 'type-moderation'
   if (keyType === 'scoring') return 'type-scoring'
+  if (keyType === 'image') return 'type-image'
   return 'type-default'
 }
 
@@ -1973,6 +2132,105 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.data-table-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.data-table-card-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.team-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  background: var(--color-bg-input);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.team-block-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: 0.01em;
+}
+
+.team-edit-btn {
+  padding: 0.35rem 0.9rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-accent);
+  background: transparent;
+  border: 1px solid var(--color-text-accent);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.team-edit-btn:hover {
+  background: var(--color-text-accent);
+  color: #fff;
+}
+
+.share-code-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.share-code-value {
+  flex: 1;
+  min-width: 8rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.875rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--color-text-primary);
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+  user-select: all;
+}
+
+.form-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+  line-height: 1.4;
+}
+
+.secondary-action-btn {
+  padding: 0.45rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.secondary-action-btn:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-hover);
+}
+
+.secondary-action-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .data-table-toolbar {
@@ -2905,23 +3163,116 @@ onMounted(() => {
   background: var(--color-bg-input);
 }
 
-/* 模型配置 - grid 布局 */
-.model-list .list-header,
-.model-list .account-item {
-  display: grid;
-  grid-template-columns: 1.5fr 80px 80px 100px 1fr 140px 100px;
-  align-items: center;
-  gap: 1rem;
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
+/* 模型配置 - 表格布局 */
+.model-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-bg-card);
+  font-size: 0.875rem;
 }
 
-.model-list {
-  min-width: 780px;
+.model-table thead {
+  background: var(--color-bg-input);
+  border-bottom: 1px solid var(--color-border);
 }
 
-.model-list .list-header span:last-child {
-  text-align: center;
+.model-table th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.model-table tbody tr {
+  border-bottom: 1px solid var(--color-border);
+  transition: background-color 0.15s ease;
+}
+
+.model-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.model-table tbody tr:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.model-table td {
+  padding: 0.75rem 1rem;
+  vertical-align: top;
+}
+
+.col-model-name {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  font-family: ui-monospace, monospace;
+  min-width: 120px;
+}
+
+.col-provider {
+  min-width: 80px;
+}
+
+.col-type {
+  min-width: 80px;
+}
+
+.col-description {
+  min-width: 200px;
+  max-width: 300px;
+  word-break: break-word;
+  white-space: normal;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.col-key {
+  font-family: ui-monospace, monospace;
+  min-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-status {
+  min-width: 60px;
+}
+
+.col-time {
+  min-width: 100px;
+  white-space: nowrap;
+}
+
+.col-actions {
+  min-width: 140px;
+  display: flex;
+  gap: 0.375rem;
+}
+
+.model-list .delete-btn,
+.model-list .toggle-btn {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  border: none;
+}
+
+.model-list .delete-btn:hover {
+  background: rgba(220, 53, 69, 0.08);
+  border-color: #dc3545;
+}
+
+.model-list .apikey-masked {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-size: 0.8125rem;
+  font-family: ui-monospace, monospace;
 }
 
 .model-info {
@@ -2933,6 +3284,10 @@ onMounted(() => {
   color: var(--color-text-primary);
   font-family: ui-monospace, monospace;
   font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .model-provider-tag {
@@ -2967,9 +3322,66 @@ onMounted(() => {
 .type-embedding { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; }
 .type-moderation { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
 .type-scoring { background: rgba(217, 119, 6, 0.1); color: #d97706; }
+.type-image { background: rgba(168, 85, 247, 0.1); color: #a855f7; }
 
-.model-default-cell {
-  justify-self: start;
+.model-description {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  word-break: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.4;
+  max-height: 3.5em;
+  overflow: hidden;
+  min-width: 0;
+  align-self: start;
+}
+
+.model-status-badge {
+  display: inline-block;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  background: transparent;
+  color: #ef4444;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.model-status-badge.is-enabled {
+  background: transparent;
+  color: #16a34a;
+}
+
+.toggle-btn {
+  padding: 0.25rem 0.6rem;
+  border-radius: 2px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: #16a34a;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  white-space: nowrap;
+}
+
+.toggle-btn.btn-enable {
+  background: transparent;
+  color: #16a34a;
+}
+
+.toggle-btn.btn-enable:hover {
+  color: #15803d;
+}
+
+.toggle-btn.btn-disable {
+  background: transparent;
+  color: #ef4444;
+}
+
+.toggle-btn.btn-disable:hover {
+  color: #dc2626;
 }
 
 .default-toggle-btn {

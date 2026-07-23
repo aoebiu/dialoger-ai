@@ -40,10 +40,17 @@ public class ChatApiKey {
      */
     private String modelProvider;
 
-    private String baseUrl;
+    /**
+     * 模型描述
+     */
+    private String description;
 
-    @TableField("default_chat")
-    private boolean defaultChat;
+    /**
+     * 是否启用（上线/下线）
+     */
+    private Boolean enabled;
+
+    private String baseUrl;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

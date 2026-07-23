@@ -1,11 +1,11 @@
 package info.mengnan.dialogerai.server.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
-import info.mengnan.dialogerai.common.param.ModelType;
 import info.mengnan.dialogerai.rag.provider.ModelParamSchemaRegistry;
 import info.mengnan.dialogerai.repository.entity.ChatApiKey;
 import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.server.service.MemberService;
+import info.mengnan.dialogerai.server.param.team.MemberTeamContext;
 import info.mengnan.dialogerai.server.service.ModelApiKeyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,78 +34,60 @@ public class ModelApiKeyController {
     @GetMapping("/list")
     public R listModels() {
         Long memberId = StpUtil.getLoginIdAsLong();
-        Long ownerId = memberService.resolveResourceOwnerId(memberId);
-        return R.ok(modelApiKeyService.list(ownerId));
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        return R.ok(modelApiKeyService.list(ctx.ownerId()));
     }
 
     @PostMapping("/create")
     public R createApiKey(@RequestParam(name = "modelName") String modelName,
                           @RequestParam(name = "modelProvider") String modelProvider,
                           @RequestParam(name = "keyType") String keyType,
-                          @RequestParam(name = "apiKey") String apiKey) {
-
-        if (modelName == null || modelName.isBlank()
-                || modelProvider == null || modelProvider.isBlank()
-                || keyType == null || keyType.isBlank()
-                || apiKey == null || apiKey.isBlank())
-            return R.error(MODEL_PARAM_INVALID);
-
+                          @RequestParam(name = "apiKey") String apiKey,
+                          @RequestParam(name = "description", required = false) String description) {
         Long memberId = StpUtil.getLoginIdAsLong();
-        if (!memberService.isOwner(memberId))
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null || !ctx.isOwner())
             return R.error(MEMBER_MANAGE_DENIED);
 
-        return R.ok(modelApiKeyService.create(memberId, modelName, modelProvider, keyType, apiKey));
-    }
-
-    @PutMapping("/{id}/directChat")
-    public R setDefaultDirectChatModel(@PathVariable(name = "id") Long id) {
-        Long memberId = StpUtil.getLoginIdAsLong();
-        if (!memberService.isOwner(memberId))
-            return R.error(MEMBER_MANAGE_DENIED);
-
-        ChatApiKey chatApiKey = modelApiKeyService.findById(id);
-        if (chatApiKey == null)
-            return R.error(MODEL_KEY_NOT_FOUND);
-        if (!ModelType.CHAT.n().equals(chatApiKey.getKeyType()))
-            return R.error(MODEL_DEFAULT_INVALID);
-
-        Long ownerId = memberService.resolveResourceOwnerId(memberId);
-        if (!ownerId.equals(chatApiKey.getMemberId()))
-            return R.error(MODEL_KEY_NOT_FOUND);
-        return R.ok(modelApiKeyService.setDefaultDirectChatModel(ownerId, id));
-    }
-
-    @DeleteMapping("/{id}/directChat")
-    public R clearDefaultDirectChatModel(@PathVariable(name = "id") Long id) {
-        Long memberId = StpUtil.getLoginIdAsLong();
-        if (!memberService.isOwner(memberId))
-            return R.error(MEMBER_MANAGE_DENIED);
-
-        ChatApiKey chatApiKey = modelApiKeyService.findById(id);
-        if (chatApiKey == null)
-            return R.error(MODEL_KEY_NOT_FOUND);
-        if (!chatApiKey.isDefaultChat())
-            return R.error(MODEL_DEFAULT_INVALID);
-
-        Long ownerId = memberService.resolveResourceOwnerId(memberId);
-        if (!ownerId.equals(chatApiKey.getMemberId()))
-            return R.error(MODEL_KEY_NOT_FOUND);
-        return R.ok(modelApiKeyService.clearDefaultDirectChatModel(ownerId, id));
+        return R.ok(modelApiKeyService.create(ctx.ownerId(), modelName, modelProvider, keyType, apiKey, description));
     }
 
     @DeleteMapping("/{id}")
     public R deleteApiKey(@PathVariable(name = "id") Long id) {
         Long memberId = StpUtil.getLoginIdAsLong();
-        if (!memberService.isOwner(memberId))
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null || !ctx.isOwner())
             return R.error(MEMBER_MANAGE_DENIED);
 
         ChatApiKey chatApiKey = modelApiKeyService.findById(id);
         if (chatApiKey == null)
             return R.error(MODEL_KEY_NOT_FOUND);
-        if (!memberService.isTeamMember(memberService.resolveTeamId(memberId), chatApiKey.getMemberId()))
+        if (!memberService.isTeamMember(ctx, chatApiKey.getMemberId()))
+            return R.error(MODEL_KEY_DELETE_DENIED);
+        if (modelApiKeyService.isBound(id))
+            return R.error(MODEL_KEY_BOUND);
+
+        modelApiKeyService.delete(ctx.ownerId(), id);
+        return R.ok();
+    }
+
+    @PutMapping("/{id}/toggle")
+    public R toggleEnabled(@PathVariable(name = "id") Long id) {
+        Long memberId = StpUtil.getLoginIdAsLong();
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null || !ctx.isOwner())
+            return R.error(MEMBER_MANAGE_DENIED);
+
+        ChatApiKey chatApiKey = modelApiKeyService.findById(id);
+        if (chatApiKey == null)
+            return R.error(MODEL_KEY_NOT_FOUND);
+        if (!memberService.isTeamMember(ctx, chatApiKey.getMemberId()))
             return R.error(MODEL_KEY_DELETE_DENIED);
 
-        modelApiKeyService.delete(id);
-        return R.ok();
+        boolean isDisabling = Boolean.TRUE.equals(chatApiKey.getEnabled());
+        if (isDisabling && modelApiKeyService.isBound(id))
+            return R.error(MODEL_KEY_BOUND);
+
+        return R.ok(modelApiKeyService.toggleEnabled(id));
     }
 }

@@ -3,6 +3,7 @@ package info.mengnan.dialogerai.rag.config;
 import lombok.Data;
 
 @Data
+@Deprecated
 public class DefaultModelConfig {
 
     @Deprecated

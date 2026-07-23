@@ -2,13 +2,13 @@ package info.mengnan.dialogerai.server.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import info.mengnan.dialogerai.repository.entity.ChatMember;
-import info.mengnan.dialogerai.repository.entity.ChatMemberRelation;
 import info.mengnan.dialogerai.repository.entity.ChatTeam;
-import info.mengnan.dialogerai.repository.enums.MemberRole;
 import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.server.param.team.CreateTeamMemberRequest;
 import info.mengnan.dialogerai.server.param.team.UpdateTeamMemberRequest;
+import info.mengnan.dialogerai.server.param.team.UpdateTeamRequest;
 import info.mengnan.dialogerai.server.service.MemberService;
+import info.mengnan.dialogerai.server.param.team.MemberTeamContext;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -22,6 +22,15 @@ public class MemberRelationController {
 
     private final MemberService memberService;
 
+    @PutMapping
+    public R updateTeam(@RequestBody UpdateTeamRequest request) {
+        Long ownerId = StpUtil.getLoginIdAsLong();
+        R ownerError = requireOwner(ownerId, null);
+        if (ownerError != null) return ownerError;
+        memberService.updateTeam(ownerId, request);
+        return R.ok();
+    }
+
     @PostMapping("/member")
     public R createMember(@RequestBody CreateTeamMemberRequest request) {
         if (StringUtils.isEmpty(request.getUsername()) || StringUtils.isEmpty(request.getPassword()))
@@ -33,6 +42,7 @@ public class MemberRelationController {
             return ownerError;
 
         request.setOwnerId(ownerId);
+        request.setPassword(MemberController.encryptPassword(request.getPassword()));
         return R.ok(memberService.createTeamMember(request));
     }
 
@@ -43,8 +53,8 @@ public class MemberRelationController {
         if (currentUser == null)
             return R.error(MEMBER_NOT_FOUND);
 
-        Long teamId = memberService.resolveTeamId(memberId);
-        ChatTeam team = memberService.findTeamById(teamId);
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        ChatTeam team = ctx != null ? memberService.findTeamById(ctx.teamId()) : null;
         if (team == null)
             return R.error(MEMBER_NOT_FOUND);
 
@@ -58,7 +68,8 @@ public class MemberRelationController {
         if (ownerError != null)
             return ownerError;
 
-        return R.ok(memberService.listTeamMembers(memberService.resolveTeamId(ownerId)));
+        MemberTeamContext ctx = memberService.resolveTeamContext(ownerId);
+        return R.ok(memberService.listTeamMembers(ctx.teamId()));
     }
 
     @PutMapping("/member/{id}")
@@ -69,6 +80,8 @@ public class MemberRelationController {
             return ownerError;
 
         request.setId(id);
+        if (StringUtils.isNotEmpty(request.getPassword()))
+            request.setPassword(MemberController.encryptPassword(request.getPassword()));
         memberService.updateTeamMember(request);
         return R.ok();
     }
@@ -85,18 +98,13 @@ public class MemberRelationController {
     }
 
     private R requireOwner(Long ownerId, Long memberId) {
-        ChatMember owner = memberService.findById(ownerId);
-        if (owner == null || owner.getRole() != MemberRole.OWNER)
-            return R.error(MEMBER_MANAGE_DENIED);
-
-        ChatTeam team = memberService.findTeamByOwnerId(ownerId);
-        if (team == null)
+        MemberTeamContext ctx = memberService.resolveTeamContext(ownerId);
+        if (ctx == null || !ctx.isOwner())
             return R.error(MEMBER_MANAGE_DENIED);
         if (memberId == null)
             return null;
 
-        ChatMemberRelation relation = memberService.findRelationByMemberId(memberId);
-        if (relation == null || !team.getId().equals(relation.getTeamId()))
+        if (!memberService.isTeamMember(ctx, memberId))
             return R.error(MEMBER_MANAGE_DENIED);
 
         if (memberService.findById(memberId) == null)

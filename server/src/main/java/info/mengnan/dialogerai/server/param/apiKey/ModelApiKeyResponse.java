@@ -11,9 +11,10 @@ public class ModelApiKeyResponse {
     private String modelName;
     private String modelProvider;
     private String keyType;
+    private String description;
+    private Boolean enabled;
     private String maskedApiKey;
     private LocalDateTime createdAt;
-    private boolean defaultDirectChat;
 
     public static ModelApiKeyResponse from(ChatApiKey key) {
         ModelApiKeyResponse response = new ModelApiKeyResponse();
@@ -21,6 +22,8 @@ public class ModelApiKeyResponse {
         response.setModelName(key.getModelName());
         response.setModelProvider(key.getModelProvider());
         response.setKeyType(key.getKeyType());
+        response.setDescription(key.getDescription());
+        response.setEnabled(key.getEnabled() == null ? true : key.getEnabled());
         response.setCreatedAt(key.getCreatedAt());
         return response;
     }
@@ -28,7 +31,6 @@ public class ModelApiKeyResponse {
     public static ModelApiKeyResponse fromMasked(ChatApiKey key) {
         ModelApiKeyResponse response = from(key);
         response.setMaskedApiKey(maskApiKey(key.getApiKey()));
-        response.setDefaultDirectChat(key.isDefaultChat());
         return response;
     }
 

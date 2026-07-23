@@ -6,8 +6,10 @@ import info.mengnan.dialogerai.server.param.R;
 import info.mengnan.dialogerai.server.param.knowledgebase.KnowledgeBaseRequest;
 import info.mengnan.dialogerai.server.service.KnowledgeBaseService;
 import info.mengnan.dialogerai.server.service.MemberService;
+import info.mengnan.dialogerai.server.param.team.MemberTeamContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import static info.mengnan.dialogerai.server.param.ErrorCode.*;
@@ -23,7 +25,7 @@ public class KnowledgeBaseController {
 
     @PostMapping
     public R create(@RequestBody KnowledgeBaseRequest request) {
-        if (request.getName() == null || request.getName().isBlank())
+        if (StringUtils.isEmpty(request.getName()))
             return R.error(KB_NAME_EMPTY);
 
         Long memberId = StpUtil.getLoginIdAsLong();
@@ -41,7 +43,7 @@ public class KnowledgeBaseController {
         if (!hasPermission(memberId, kb.getMemberId()))
             return R.error(KB_WRITE_DENIED);
 
-        if (request.getName() == null || request.getName().isBlank())
+        if (StringUtils.isEmpty(request.getName()))
             return R.error(KB_NAME_EMPTY);
 
         return R.ok(knowledgeBaseService.update(kbId, request));
@@ -64,9 +66,10 @@ public class KnowledgeBaseController {
     @GetMapping("/list")
     public R list() {
         Long memberId = StpUtil.getLoginIdAsLong();
-        boolean isOwner = memberService.isOwner(memberId);
-        Long teamId = memberService.resolveTeamId(memberId);
-        return R.ok(knowledgeBaseService.list(memberId, isOwner, teamId));
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null)
+            return R.error(MEMBER_NOT_FOUND);
+        return R.ok(knowledgeBaseService.list(memberId, ctx.isOwner(), ctx.teamId()));
     }
 
     @GetMapping("/{kbId}")
@@ -98,8 +101,9 @@ public class KnowledgeBaseController {
 
 
     private boolean hasPermission(Long memberId, Long kbOwnerMemberId) {
-        if (memberService.isOwner(memberId))
-            return memberService.isTeamMember(memberService.resolveTeamId(memberId), kbOwnerMemberId);
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx != null && ctx.isOwner())
+            return memberService.isTeamMember(ctx, kbOwnerMemberId);
         return memberId.equals(kbOwnerMemberId);
     }
 }

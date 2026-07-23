@@ -1,7 +1,6 @@
 package info.mengnan.dialogerai.repository.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import info.mengnan.dialogerai.repository.enums.MemberRole;
 import info.mengnan.dialogerai.repository.enums.MemberStatus;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -24,8 +23,6 @@ public class ChatMember {
     private String avatar;
 
     private MemberStatus status;
-
-    private MemberRole role;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

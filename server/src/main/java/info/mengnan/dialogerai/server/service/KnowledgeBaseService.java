@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -91,7 +92,7 @@ public class KnowledgeBaseService {
     }
 
     public List<KnowledgeBaseResponse> list(Long memberId, boolean isOwner, Long teamId) {
-        List<Long> teamMemberIds = memberService.listTeamMemberIds(teamId);
+        List<Long> teamMemberIds = new ArrayList<>(memberService.listTeamMemberIds(teamId));
         List<KnowledgeBase> knowledgeBaseList = isOwner
                 ? listTeamKnowledgeBases(teamMemberIds)
                 : listVisibleKnowledgeBases(memberId, teamMemberIds);
@@ -171,9 +172,11 @@ public class KnowledgeBaseService {
         if (teamMemberIds == null || teamMemberIds.isEmpty())
             return knowledgeBases;
 
-        teamMemberIds.remove(memberId);
-        if (!teamMemberIds.isEmpty())
-            knowledgeBases.addAll(knowledgeBaseRepository.findPublicByMemberIds(teamMemberIds));
+        List<Long> otherMemberIds = teamMemberIds.stream()
+                .filter(id -> !Objects.equals(id, memberId))
+                .toList();
+        if (!otherMemberIds.isEmpty())
+            knowledgeBases.addAll(knowledgeBaseRepository.findPublicByMemberIds(otherMemberIds));
 
         return knowledgeBases.stream()
                 .sorted(Comparator.comparing(KnowledgeBase::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))

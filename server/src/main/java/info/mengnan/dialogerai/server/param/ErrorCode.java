@@ -34,13 +34,15 @@ public enum ErrorCode {
     MEMBER_USERNAME_EXISTS("4008", "用户名已存在"),
     MEMBER_PHONE_EXISTS("4009", "手机号已被注册"),
     MEMBER_MANAGE_DENIED("4011", "无权执行此操作"),
+    SHARE_CODE_REQUIRED("4012", "请输入分享码"),
+    SHARE_CODE_INVALID("4013", "分享码无效"),
 
     // 模型 API Key
     MODEL_KEY_NOT_FOUND("5001", "模型 API Key 不存在"),
     MODEL_PARAM_INVALID("5002", "缺少必要参数或参数格式不合法"),
     MODEL_KEY_DELETE_DENIED("5003", "无权删除该 API Key"),
-    MODEL_DEFAULT_INVALID("5004", "仅 chat 类型模型可设为默认对话模型"),
     MODEL_DEFAULT_REQUIRED("5005", "当前组织未配置默认对话模型"),
+    MODEL_KEY_BOUND("5004", "该模型已配置到 Agent，无法删除或禁用"),
 
     // 应用配置
     CONFIG_NOT_FOUND("7001", "配置不存在"),

@@ -21,23 +21,6 @@ public interface ChatApiKeyMapper extends BaseMapper<ChatApiKey> {
         return selectList(new LambdaQueryWrapper<ChatApiKey>()
                 .in(ChatApiKey::getId, ids));
     }
-
-    default void clearDefaultDirectChatByMemberId(Long memberId) {
-        ChatApiKey update = new ChatApiKey();
-        update.setDefaultChat(false);
-        update(update, new LambdaUpdateWrapper<ChatApiKey>()
-                .eq(ChatApiKey::getMemberId, memberId)
-                .eq(ChatApiKey::isDefaultChat, true));
-    }
-
-    default ChatApiKey findDefaultDirectChatByMemberId(Long memberId) {
-        return selectOne(new LambdaQueryWrapper<ChatApiKey>()
-                .eq(ChatApiKey::getMemberId, memberId)
-                .eq(ChatApiKey::getKeyType, "chat")
-                .eq(ChatApiKey::isDefaultChat, true)
-                .last("LIMIT 1"));
-    }
-
     default ChatApiKey findByMemberIdAndKeyTypeAndModelName(Long memberId, String keyType, String modelName) {
         return selectOne(new LambdaQueryWrapper<ChatApiKey>()
                 .eq(ChatApiKey::getMemberId, memberId)

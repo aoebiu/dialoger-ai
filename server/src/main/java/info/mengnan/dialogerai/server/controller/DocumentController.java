@@ -13,6 +13,7 @@ import info.mengnan.dialogerai.server.param.document.DocumentInfoResponse;
 import info.mengnan.dialogerai.server.service.DocumentProcessService;
 import info.mengnan.dialogerai.server.service.KnowledgeBaseService;
 import info.mengnan.dialogerai.server.service.MemberService;
+import info.mengnan.dialogerai.server.param.team.MemberTeamContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -54,12 +55,11 @@ public class DocumentController {
         if (kb == null || kb.getDeleted() != null && kb.getDeleted() == 1)
             return R.error(ErrorCode.KB_NOT_FOUND);
 
-        boolean isOwner = memberService.isOwner(memberId);
-        Long teamId = memberService.resolveTeamId(memberId);
-        if (!hasReadAccess(memberId, kb, isOwner, teamId))
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null || !hasReadAccess(memberId, kb, ctx))
             return R.error(ErrorCode.KB_NOT_FOUND);
 
-        if (!memberId.equals(kb.getMemberId()) && !isOwner)
+        if (!memberId.equals(kb.getMemberId()) && !ctx.isOwner())
             return R.error(ErrorCode.KB_WRITE_DENIED);
 
         try {
@@ -80,9 +80,8 @@ public class DocumentController {
         if (kb == null || kb.getDeleted() != null && kb.getDeleted() == 1)
             return R.error(ErrorCode.KB_NOT_FOUND);
 
-        boolean isOwner = memberService.isOwner(memberId);
-        Long teamId = memberService.resolveTeamId(memberId);
-        if (!hasReadAccess(memberId, kb, isOwner, teamId))
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null || !hasReadAccess(memberId, kb, ctx))
             return R.error(ErrorCode.KB_NOT_FOUND);
 
         List<DocumentInfoResponse> docs = documentInfoRepository.findByKbId(kbId)
@@ -157,11 +156,11 @@ public class DocumentController {
     /**
      * 读取访问校验：创建者始终可访问；OWNER 可访问团队任意 KB；MEMBER 可访问团队公开 KB。
      */
-    private boolean hasReadAccess(Long memberId, KnowledgeBase kb, boolean isOwner, Long teamId) {
+    private boolean hasReadAccess(Long memberId, KnowledgeBase kb, MemberTeamContext ctx) {
         if (memberId.equals(kb.getMemberId()))
             return true;
-        if (!memberService.isTeamMember(teamId, kb.getMemberId()))
+        if (!memberService.isTeamMember(ctx, kb.getMemberId()))
             return false;
-        return isOwner || "public".equals(kb.getVisibility());
+        return ctx.isOwner() || "public".equals(kb.getVisibility());
     }
 }

@@ -31,6 +31,7 @@
               @click="handleGenerateScript"
             >{{ generatingScript ? '生成中...' : '开始生成' }}</button>
           </div>
+          <p class="fc-section-hint">使用团队默认对话模型生成。若未配置，请先在「设置 → 模型配置」中由 Owner 设置默认模型。</p>
           <div class="generate-area">
             <textarea
               v-model="generatePrompt"
@@ -208,6 +209,7 @@
                     {{ generatingTestCases ? '生成中...' : '生成测试用例' }}
                   </button>
                 </div>
+              <p class="fc-section-hint">同样使用团队默认对话模型生成测试用例。</p>
 
               <!-- 测试用例卡片列表 -->
               <div class="batch-case-list">
@@ -643,8 +645,8 @@ async function handleGenerateScript() {
         // 轮询异常不中断
       }
     }, 1500)
-  } catch {
-    formError.value = '生成请求失败'
+  } catch (error: unknown) {
+    formError.value = getErrorMessage(error, '生成请求失败')
   }
 }
 
@@ -1277,6 +1279,13 @@ onBeforeUnmount(() => {
 }
 
 /* 生成区域 */
+.fc-section-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--color-text-muted, #8b8b8b);
+}
+
 .generate-area {
   margin-top: 0.5rem;
 }

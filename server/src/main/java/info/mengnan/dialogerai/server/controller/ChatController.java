@@ -3,7 +3,6 @@ package info.mengnan.dialogerai.server.controller;
 import cn.dev33.satoken.stp.StpUtil;
 import info.mengnan.dialogerai.rag.ChatService;
 import info.mengnan.dialogerai.rag.handler.StreamingResponseHandler;
-import info.mengnan.dialogerai.rag.service.DirectModelInvoker;
 import info.mengnan.dialogerai.repository.entity.ChatMessage;
 import info.mengnan.dialogerai.repository.entity.ChatSession;
 import info.mengnan.dialogerai.repository.repo.ChatMessageRagSourceRepository;
@@ -46,8 +45,6 @@ public class ChatController {
     private final ChatMessageService chatMessageService;
     private final ChatMessageToolExecutionService chatMessageToolExecutionService;
     private final ChatMessageRagSourceRepository ragSourceRepository;
-    private final MemberService memberService;
-    private final ModelConfigService modelConfigService;
 
     /**
      * 流式对话接口 - 使用 HTTP Streaming (application/x-ndjson)
@@ -63,10 +60,6 @@ public class ChatController {
         }
         Long memberId = StpUtil.getLoginIdAsLong();
         request.setMemberId(memberId);
-        Long ownerId = memberService.resolveResourceOwnerId(memberId);
-        String defaultModelName = modelConfigService.findDefaultDirectChatModelName(ownerId);
-        if (defaultModelName == null || defaultModelName.isBlank())
-            return Flux.error(new IllegalArgumentException(MODEL_DEFAULT_REQUIRED.getMessage()));
         return streamResponse(request);
     }
 

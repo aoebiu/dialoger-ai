@@ -105,6 +105,9 @@ const activeSection = computed(() => {
   if (name === 'functionCallCreate' || name === 'functionCallDetail') {
     return 'functionCall'
   }
+  if (name === 'agentOptionCreate' || name === 'agentOptionDetail') {
+    return 'agentOption'
+  }
   if (
     name === 'kbCreate' ||
     name === 'kbUpload' ||

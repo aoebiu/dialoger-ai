@@ -13,6 +13,7 @@ import info.mengnan.dialogerai.server.param.agent.BindableModelOption;
 import info.mengnan.dialogerai.server.param.agent.ModelBinding;
 import info.mengnan.dialogerai.server.service.AgentOptionService;
 import info.mengnan.dialogerai.server.service.MemberService;
+import info.mengnan.dialogerai.server.param.team.MemberTeamContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -43,10 +44,10 @@ public class AgentOptionController {
     @GetMapping("/bindables")
     public R bindables() {
         Long memberId = StpUtil.getLoginIdAsLong();
-        Long ownerId = memberService.resolveResourceOwnerId(memberId);
-        boolean isOwner = memberService.isOwner(memberId);
-        Long teamId = memberService.resolveTeamId(memberId);
-        return R.ok(agentOptionService.listBindables(memberId, ownerId, isOwner, teamId));
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null)
+            return R.error(MEMBER_NOT_FOUND);
+        return R.ok(agentOptionService.listBindables(memberId, ctx.ownerId(), ctx.isOwner(), ctx.teamId()));
     }
 
     @PostMapping("/create")
@@ -55,7 +56,8 @@ public class AgentOptionController {
             return R.error(AGENT_OPTION_NAME_EMPTY);
 
         Long memberId = StpUtil.getLoginIdAsLong();
-        Long ownerId = memberService.resolveResourceOwnerId(memberId);
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        Long ownerId = ctx.ownerId();
         if (!isModelBindingsValid(ownerId, request.getModelBindings()))
             return R.error(AGENT_OPTION_MODEL_INVALID);
         if (!isKbBindingsValid(memberId, request.getKbIds()))
@@ -79,7 +81,8 @@ public class AgentOptionController {
         if (StringUtils.isEmpty(request.getName()))
             return R.error(AGENT_OPTION_NAME_EMPTY);
 
-        Long ownerId = memberService.resolveResourceOwnerId(memberId);
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        Long ownerId = ctx.ownerId();
         if (!isModelBindingsValid(ownerId, request.getModelBindings()))
             return R.error(AGENT_OPTION_MODEL_INVALID);
         if (!isKbBindingsValid(memberId, request.getKbIds()))
@@ -147,9 +150,9 @@ public class AgentOptionController {
     private boolean isKbBindingsValid(Long memberId, List<Long> kbIds) {
         if (kbIds == null || kbIds.isEmpty()) return true;
 
-        boolean isOwner = memberService.isOwner(memberId);
-        Long teamId = memberService.resolveTeamId(memberId);
-        Set<Long> bindableKbIds = agentOptionService.listBindableKnowledgeBases(memberId, isOwner, teamId)
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null) return false;
+        Set<Long> bindableKbIds = agentOptionService.listBindableKnowledgeBases(memberId, ctx.isOwner(), ctx.teamId())
                 .stream()
                 .map(BindableKbOption::getId)
                 .collect(Collectors.toSet());

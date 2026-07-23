@@ -15,6 +15,10 @@ export interface TeamOverview {
   owner: TeamMember
   members: TeamMember[]
   currentUserId: number
+  teamName?: string
+  defaultChatModelId?: number | null
+  /** 团队分享码（仅 Owner 可见） */
+  shareCode?: string | null
 }
 
 export interface CreateTeamMemberRequest {
@@ -29,6 +33,13 @@ export interface UpdateTeamMemberRequest {
   phone?: string
   status?: number
   password?: string
+}
+
+export interface UpdateTeamRequest {
+  name?: string
+  defaultChatModelId?: number | null
+  /** 有值时随保存写入；未传则不改 */
+  shareCode?: string | null
 }
 
 export function statusLabel(status?: number): string {
@@ -65,6 +76,10 @@ export async function createTeamMember(body: CreateTeamMemberRequest) {
 
 export async function updateTeamMember(id: number, body: UpdateTeamMemberRequest) {
   return $put(`/member/team/member/${id}`, body)
+}
+
+export async function updateTeam(body: UpdateTeamRequest) {
+  return $put('/member/team', body)
 }
 
 export async function disableTeamMember(id: number) {
