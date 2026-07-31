@@ -138,7 +138,8 @@ public class MemberService {
             return null;
 
         return new MemberTeamContext(
-                memberId, team.getId(), team.getOwnerId(), membership.getRole(), team.getDefaultChatModelId());
+                memberId, team.getId(), team.getOwnerId(), membership.getRole(),
+                team.getDefaultChatModelId(), team.getDefaultImageModelId());
     }
 
     public List<Long> listTeamMemberIds(Long teamId) {
@@ -186,6 +187,7 @@ public class MemberService {
         TeamOverviewResponse overview = new TeamOverviewResponse();
         overview.setTeamName(team.getName());
         overview.setDefaultChatModelId(team.getDefaultChatModelId());
+        overview.setDefaultImageModelId(team.getDefaultImageModelId());
         if (ctx != null && ctx.isOwner())
             overview.setShareCode(team.getShareCode());
         overview.setOwner(toTeamMemberResponse(owner, ownerMembership));
@@ -202,11 +204,13 @@ public class MemberService {
 
         String name = StringUtils.hasText(request.getName()) ? request.getName().trim() : team.getName();
         Long defaultChatModelId = request.getDefaultChatModelId();
+        Long defaultImageModelId = request.getDefaultImageModelId();
 
         LambdaUpdateWrapper<ChatTeam> wrapper = new LambdaUpdateWrapper<ChatTeam>()
                 .eq(ChatTeam::getId, team.getId())
                 .set(ChatTeam::getName, name)
-                .set(ChatTeam::getDefaultChatModelId, defaultChatModelId);
+                .set(ChatTeam::getDefaultChatModelId, defaultChatModelId)
+                .set(ChatTeam::getDefaultImageModelId, defaultImageModelId);
 
         if (StringUtils.hasText(request.getShareCode())) {
             String shareCode = request.getShareCode().trim();
@@ -218,8 +222,8 @@ public class MemberService {
         }
 
         teamRepository.update(wrapper);
-        log.info("team updated: ownerId={}, name={}, defaultChatModelId={}, shareCode={}",
-                ownerId, name, defaultChatModelId, team.getShareCode());
+        log.info("team updated: ownerId={}, name={}, defaultChatModelId={}, defaultImageModelId={}, shareCode={}",
+                ownerId, name, defaultChatModelId, defaultImageModelId, team.getShareCode());
     }
 
     public List<TeamMemberResponse> listTeamMembers(Long teamId) {

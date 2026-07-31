@@ -11,6 +11,8 @@ public class TeamOverviewResponse {
 
     private Long defaultChatModelId;
 
+    private Long defaultImageModelId;
+
     /** 团队分享码（仅 Owner 可见） */
     private String shareCode;
 

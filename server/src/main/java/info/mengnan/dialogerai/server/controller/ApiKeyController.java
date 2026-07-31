@@ -1,9 +1,13 @@
 package info.mengnan.dialogerai.server.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
+import info.mengnan.dialogerai.repository.entity.ChatAgentOption;
 import info.mengnan.dialogerai.repository.entity.ChatProjectApiKey;
+import info.mengnan.dialogerai.repository.repo.ChatAgentOptionRepository;
 import info.mengnan.dialogerai.repository.repo.ProjectApiKeyRepository;
 import info.mengnan.dialogerai.server.param.R;
+import info.mengnan.dialogerai.server.param.apiKey.ApiKeyCreateRequest;
+import info.mengnan.dialogerai.server.param.apiKey.ApiKeyUpdateRequest;
 import info.mengnan.dialogerai.server.param.apiKey.ProjectApiKeyResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +16,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * API Key 管理控制器
@@ -26,6 +32,7 @@ import java.util.UUID;
 public class ApiKeyController {
 
     private final ProjectApiKeyRepository projectApiKeyService;
+    private final ChatAgentOptionRepository chatAgentOptionRepository;
 
     /**
      * 获取当前用户的 API Key 列表（列表中 key 脱敏显示）
@@ -34,18 +41,31 @@ public class ApiKeyController {
     public R listApiKeys() {
         Long memberId = StpUtil.getLoginIdAsLong();
         List<ChatProjectApiKey> keys = projectApiKeyService.listByMemberId(memberId);
-        List<ProjectApiKeyResponse> list = keys.stream().map(k -> {
-            ProjectApiKeyResponse response = new ProjectApiKeyResponse();
-            response.setId(k.getId());
-            response.setName(k.getName());
-            response.setStatus(k.getStatus());
-            response.setExpiresAt(k.getExpiresAt());
-            response.setLastUsedAt(k.getLastUsedAt());
-            response.setCreatedAt(k.getCreatedAt());
-            response.setApiKey(maskKey(k.getApiKey()));
-            return response;
-        }).toList();
+        Map<Long, String> agentNames = loadAgentNames(memberId);
+
+        List<ProjectApiKeyResponse> list = keys.stream().map(k -> toResponse(k, agentNames)).toList();
         return R.ok(list);
+    }
+
+    private Map<Long, String> loadAgentNames(Long memberId) {
+        List<ChatAgentOption> agents = chatAgentOptionRepository.findByMemberId(memberId);
+        return agents.stream().collect(Collectors.toMap(ChatAgentOption::getId, ChatAgentOption::getName, (a, b) -> a));
+    }
+
+    private ProjectApiKeyResponse toResponse(ChatProjectApiKey k, Map<Long, String> agentNames) {
+        ProjectApiKeyResponse response = new ProjectApiKeyResponse();
+        response.setId(k.getId());
+        response.setName(k.getName());
+        response.setStatus(k.getStatus());
+        response.setExpiresAt(k.getExpiresAt());
+        response.setLastUsedAt(k.getLastUsedAt());
+        response.setCreatedAt(k.getCreatedAt());
+        response.setApiKey(maskKey(k.getApiKey()));
+        response.setChatAgentOptionId(k.getChatAgentOptionId());
+        if (k.getChatAgentOptionId() != null) {
+            response.setChatAgentOptionName(agentNames.get(k.getChatAgentOptionId()));
+        }
+        return response;
     }
 
     private static String maskKey(String apiKey) {
@@ -55,36 +75,70 @@ public class ApiKeyController {
 
     /**
      * 创建新的 API Key
-     * @param name API Key 的名称/描述
-     * @param expiresInDays 过期天数（可选，不传则永不过期）
      */
     @PostMapping("/create")
-    public R createApiKey(
-            @RequestParam(name = "name", required = false) String name,
-            @RequestParam(name = "expiresInDays", required = false) Integer expiresInDays) {
-
+    public R createApiKey(@RequestBody(required = false) ApiKeyCreateRequest request) {
         Long memberId = StpUtil.getLoginIdAsLong();
+        if (request == null) request = new ApiKeyCreateRequest();
+
+        Long agentOptionId = request.getChatAgentOptionId();
+        if (agentOptionId != null && !isOwnedAgent(memberId, agentOptionId)) {
+            return R.error("绑定的 Agent 不存在或无权访问");
+        }
 
         String apiKey = "sk-" + UUID.randomUUID().toString().replace("-", "");
 
         ChatProjectApiKey entity = new ChatProjectApiKey();
         entity.setApiKey(apiKey);
         entity.setMemberId(memberId);
-        entity.setName(StringUtils.hasText(name) ? name.trim() : null);
+        entity.setName(StringUtils.hasText(request.getName()) ? request.getName().trim() : null);
+        entity.setChatAgentOptionId(agentOptionId);
         entity.setStatus(1);
 
-        if (expiresInDays != null && expiresInDays > 0) {
-            entity.setExpiresAt(LocalDateTime.now().plusDays(expiresInDays));
+        if (request.getExpiresInDays() != null && request.getExpiresInDays() > 0) {
+            entity.setExpiresAt(LocalDateTime.now().plusDays(request.getExpiresInDays()));
         }
         projectApiKeyService.insert(entity);
-        log.info("User {} created API Key: {}", memberId, entity.getId());
+        log.info("User {} created API Key: {}, agentOptionId={}", memberId, entity.getId(), agentOptionId);
 
         ProjectApiKeyResponse response = new ProjectApiKeyResponse();
         response.setId(entity.getId());
         response.setApiKey(apiKey);
         response.setName(entity.getName());
         response.setExpiresAt(entity.getExpiresAt());
+        response.setChatAgentOptionId(entity.getChatAgentOptionId());
+        if (entity.getChatAgentOptionId() != null) {
+            ChatAgentOption agent = chatAgentOptionRepository.findById(entity.getChatAgentOptionId());
+            if (agent != null) response.setChatAgentOptionName(agent.getName());
+        }
         return R.ok(response);
+    }
+
+    /**
+     * 更新 API Key 的 Agent 绑定
+     */
+    @PutMapping("/{id}")
+    public R updateApiKey(@PathVariable("id") Long id, @RequestBody ApiKeyUpdateRequest request) {
+        Long memberId = StpUtil.getLoginIdAsLong();
+
+        ChatProjectApiKey projectApiKey = projectApiKeyService.findById(id);
+        if (projectApiKey == null || !memberId.equals(projectApiKey.getMemberId())) {
+            return R.error("该 API Key 不存在或无权修改");
+        }
+
+        Long agentOptionId = request.getChatAgentOptionId();
+        if (agentOptionId != null && !isOwnedAgent(memberId, agentOptionId)) {
+            return R.error("绑定的 Agent 不存在或无权访问");
+        }
+
+        projectApiKey.setChatAgentOptionId(agentOptionId);
+        projectApiKeyService.updateById(projectApiKey);
+        return R.ok();
+    }
+
+    private boolean isOwnedAgent(Long memberId, Long agentOptionId) {
+        ChatAgentOption agent = chatAgentOptionRepository.findById(agentOptionId);
+        return agent != null && memberId.equals(agent.getMemberId());
     }
 
     /**

@@ -134,6 +134,7 @@
                 <div class="list-header">
                   <span>名称</span>
                   <span>Key</span>
+                  <span>绑定 Agent</span>
                   <span>创建时间</span>
                   <span>操作</span>
                 </div>
@@ -145,6 +146,19 @@
                   <div class="account-info apikey-info">
                     <span class="account-username">{{ key.name || '未命名' }}</span>
                     <span class="apikey-masked">{{ key.apiKey }}</span>
+                    <span class="apikey-agent">
+                      <select
+                        class="form-input apikey-agent-select"
+                        :value="key.chatAgentOptionId ?? ''"
+                        :disabled="updatingKeyIds.has(key.id)"
+                        @change="onKeyAgentChange(key, $event)"
+                      >
+                        <option value="">未绑定</option>
+                        <option v-for="agent in agentOptionList" :key="agent.id" :value="agent.id">
+                          {{ agent.name }}
+                        </option>
+                      </select>
+                    </span>
                     <span class="apikey-meta">
                       {{ formatDate(key.createdAt) }}
                       <template v-if="key.expiresAt"> · 过期 {{ formatDate(key.expiresAt) }}</template>
@@ -193,6 +207,15 @@
                     placeholder="例如：30"
                     min="1"
                   />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">绑定 Agent（可选，多模态图片识别必需）</label>
+                  <select v-model="createKeyForm.chatAgentOptionId" class="form-input">
+                    <option :value="null">不绑定</option>
+                    <option v-for="agent in agentOptionList" :key="agent.id" :value="agent.id">
+                      {{ agent.name }}
+                    </option>
+                  </select>
                 </div>
                 <p v-if="createKeyError" class="form-error">{{ createKeyError }}</p>
               </div>
@@ -778,7 +801,7 @@
           <div class="section-header-bar">
             <div class="section-header-info">
               <h1 class="page-title">模型配置</h1>
-              <p class="page-desc">配置第三方模型的 API Key，支持 OpenAI、Anthropic、DeepSeek 等模型提供商。</p>
+              <p class="page-desc">配置第三方模型的 API Key，支持 OpenAI、Anthropic、DeepSeek、Qwen 等模型提供商。</p>
             </div>
             <div class="section-header-actions">
               <button v-if="auth.isOwner" type="button" class="primary-action-btn" @click="showCreateModelModal = true">
@@ -839,6 +862,14 @@
                       </td>
                       <td class="col-time">{{ formatDate(item.createdAt) }}</td>
                       <td class="col-actions">
+                        <button
+                          v-if="auth.isOwner"
+                          type="button"
+                          class="edit-btn"
+                          @click="openEditModelModal(item)"
+                        >
+                          编辑
+                        </button>
                         <button
                           v-if="auth.isOwner"
                           type="button"
@@ -917,8 +948,18 @@
                     v-model="createModelForm.description"
                     class="form-input form-textarea"
                     rows="3"
-                    placeholder="请输入模型描述，如参数范围、能力说明等（至少支持80字）"
+                    placeholder="请输入模型描述、能力说明等"
                   />
+                </div>
+                <div v-if="isChatKeyType(createModelForm.keyType)" class="form-group">
+                  <label class="form-label">模型能力</label>
+                  <label class="capability-toggle">
+                    <input
+                      type="checkbox"
+                      v-model="createModelForm.visionSupported"
+                    />
+                    支持视觉理解
+                  </label>
                 </div>
                 <div class="form-group">
                   <label class="form-label">API Key <span class="required">*</span></label>
@@ -935,6 +976,53 @@
                 <button type="button" class="btn-cancel" @click="closeCreateModelModal">取消</button>
                 <button type="button" class="btn-confirm" :disabled="creatingModelKey" @click="submitCreateModelKey">
                   {{ creatingModelKey ? '添加中...' : '确定' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 编辑模型弹窗（仅允许编辑描述与能力） -->
+          <div v-if="showEditModelModal" class="modal-overlay">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h2 class="modal-title">编辑模型</h2>
+                <button type="button" class="modal-close" @click="closeEditModelModal">×</button>
+              </div>
+              <div class="modal-body">
+                <div class="form-group">
+                  <label class="form-label">模型名称</label>
+                  <input :value="editingModelKey?.modelName" type="text" class="form-input" disabled />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">模型提供商</label>
+                  <input :value="editingModelKey?.modelProvider" type="text" class="form-input" disabled />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">模型类型</label>
+                  <input :value="editingModelKey ? keyTypeLabel(editingModelKey.keyType) : ''" type="text" class="form-input" disabled />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">模型描述</label>
+                  <textarea
+                    v-model="editModelForm.description"
+                    class="form-input form-textarea"
+                    rows="3"
+                    placeholder="请输入模型描述、能力说明等"
+                  />
+                </div>
+                <div v-if="editingModelKey && isChatKeyType(editingModelKey.keyType)" class="form-group">
+                  <label class="form-label">模型能力</label>
+                  <label class="capability-toggle">
+                    <input type="checkbox" v-model="editModelForm.visionSupported" />
+                    支持视觉理解
+                  </label>
+                </div>
+                <p v-if="editModelError" class="form-error">{{ editModelError }}</p>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn-cancel" @click="closeEditModelModal">取消</button>
+                <button type="button" class="btn-confirm" :disabled="savingModelKey" @click="submitEditModelKey">
+                  {{ savingModelKey ? '保存中...' : '保存' }}
                 </button>
               </div>
             </div>
@@ -1060,9 +1148,9 @@ import {
   statusLabel,
 } from '@/api/team'
 import type { TeamMember, TeamOverview } from '@/api/team'
-import { getApiKeyList, createApiKey, disableApiKey, deleteApiKey } from '@/api/apikey'
+import { getApiKeyList, createApiKey, updateApiKey, disableApiKey, deleteApiKey } from '@/api/apikey'
 import type { ApiKeyListItem, CreateApiKeyResult } from '@/api/apikey'
-import { getModelKeyList, createModelKey, deleteModelKey, toggleModelKeyEnabled } from '@/api/model'
+import { getModelKeyList, createModelKey, deleteModelKey, toggleModelKeyEnabled, updateModelKey } from '@/api/model'
 import type { ModelApiKeyItem } from '@/api/model'
 import { getFunctionCallList, deleteFunctionCall } from '@/api/functioncall'
 import type { FunctionCallItem } from '@/api/functioncall'
@@ -1170,8 +1258,13 @@ const apiKeyList = ref<ApiKeyListItem[]>([])
 const showCreateKeyModal = ref(false)
 const creatingKey = ref(false)
 const createKeyError = ref('')
-const createKeyForm = ref({ name: '', expiresInDays: undefined as number | undefined })
+const createKeyForm = ref<{
+  name: string
+  expiresInDays: number | undefined
+  chatAgentOptionId: number | null
+}>({ name: '', expiresInDays: undefined, chatAgentOptionId: null })
 const newKeyResult = ref<CreateApiKeyResult | null>(null)
+const updatingKeyIds = ref<Set<number>>(new Set())
 
 // 模型配置相关
 const modelKeyList = ref<ModelApiKeyItem[]>([])
@@ -1185,8 +1278,19 @@ const createModelForm = ref({
   keyType: 'chat',
   description: '',
   apiKey: '',
+  visionSupported: false,
 })
-const providerOptions = ['OpenAI', 'Anthropic', 'DeepSeek', 'Ollama', '自定义']
+const providerOptions = ['OpenAI', 'Anthropic', 'DeepSeek', 'Qwen', 'Ollama', '自定义']
+
+// 编辑模型
+const showEditModelModal = ref(false)
+const savingModelKey = ref(false)
+const editModelError = ref('')
+const editingModelKey = ref<ModelApiKeyItem | null>(null)
+const editModelForm = ref({
+  description: '',
+  visionSupported: false,
+})
 
 // Function Call 管理
 const functionCallList = ref<FunctionCallItem[]>([])
@@ -1501,7 +1605,7 @@ async function loadApiKeyList() {
 
 function closeCreateKeyModal() {
   showCreateKeyModal.value = false
-  createKeyForm.value = { name: '', expiresInDays: undefined }
+  createKeyForm.value = { name: '', expiresInDays: undefined, chatAgentOptionId: null }
   createKeyError.value = ''
 }
 
@@ -1524,10 +1628,13 @@ async function submitCreateKey() {
   createKeyError.value = ''
   creatingKey.value = true
   try {
-    const params: { name?: string; expiresInDays?: number } = {}
+    const params: { name?: string; expiresInDays?: number; chatAgentOptionId?: number | null } = {}
     if (createKeyForm.value.name.trim()) params.name = createKeyForm.value.name.trim()
     if (createKeyForm.value.expiresInDays != null && createKeyForm.value.expiresInDays > 0) {
       params.expiresInDays = createKeyForm.value.expiresInDays
+    }
+    if (createKeyForm.value.chatAgentOptionId != null) {
+      params.chatAgentOptionId = createKeyForm.value.chatAgentOptionId
     }
     const res = await createApiKey(params)
     if (res.success && res.data) {
@@ -1540,6 +1647,34 @@ async function submitCreateKey() {
     createKeyError.value = e.message || '创建失败'
   } finally {
     creatingKey.value = false
+  }
+}
+
+
+async function onKeyAgentChange(key: ApiKeyListItem, event: Event) {
+  const raw = (event.target as HTMLSelectElement).value
+  const nextId = raw === '' ? null : Number(raw)
+  const previousId = key.chatAgentOptionId
+  updatingKeyIds.value.add(key.id)
+  try {
+    const res = await updateApiKey(key.id, { chatAgentOptionId: nextId })
+    if (res.success) {
+      key.chatAgentOptionId = nextId
+      key.chatAgentOptionName = nextId != null
+        ? agentOptionList.value.find((a) => a.id === nextId)?.name ?? null
+        : null
+      toastSuccess('已更新绑定的 Agent')
+    } else {
+      toastError(res.message || '更新失败')
+      key.chatAgentOptionId = previousId
+      ;(event.target as HTMLSelectElement).value = previousId != null ? String(previousId) : ''
+    }
+  } catch (e: any) {
+    toastError(e.message || '更新失败')
+    key.chatAgentOptionId = previousId
+    ;(event.target as HTMLSelectElement).value = previousId != null ? String(previousId) : ''
+  } finally {
+    updatingKeyIds.value.delete(key.id)
   }
 }
 
@@ -1786,6 +1921,7 @@ function closeCreateModelModal() {
     keyType: 'chat',
     description: '',
     apiKey: '',
+    visionSupported: false,
   }
   createModelError.value = ''
 }
@@ -1817,12 +1953,17 @@ async function submitCreateModelKey() {
 
   creatingModelKey.value = true
   try {
+    const capabilities: string[] = []
+    if (isChatKeyType(createModelForm.value.keyType) && createModelForm.value.visionSupported) {
+      capabilities.push('vision')
+    }
     const res = await createModelKey({
       modelName: createModelForm.value.modelName.trim(),
       modelProvider: provider,
       keyType: createModelForm.value.keyType,
       apiKey: createModelForm.value.apiKey.trim(),
       description: createModelForm.value.description.trim() || undefined,
+      capabilities: capabilities.length > 0 ? capabilities : undefined,
     })
     if (res.success) {
       closeCreateModelModal()
@@ -1868,44 +2009,53 @@ async function toggleModelKeyEnabledStatus(item: ModelApiKeyItem) {
   }
 }
 
-// 文档状态辅助
-function docStatusLabel(status: string): string {
-  switch (status) {
-    case 'PENDING': return '待处理'
-    case 'PARSING': return '解析中'
-    case 'CLEANING': return '清洗中'
-    case 'CHUNKING': return '分块中'
-    case 'EMBEDDING': return '向量化中'
-    case 'DONE': return '已完成'
-    case 'FAILED': return '处理失败'
-    default: return status
-  }
+function isChatKeyType(keyType: string): boolean {
+  return keyType === 'chat' || keyType === 'streaming_chat'
 }
 
-function docStatusClass(status: string): string {
-  switch (status) {
-    case 'DONE': return 'doc-status-done'
-    case 'FAILED': return 'doc-status-failed'
-    case 'PENDING': return 'doc-status-pending'
-    default: return 'doc-status-processing'
+function openEditModelModal(item: ModelApiKeyItem) {
+  editingModelKey.value = item
+  editModelForm.value = {
+    description: item.description || '',
+    visionSupported: (item.capabilities || []).includes('vision'),
   }
+  editModelError.value = ''
+  showEditModelModal.value = true
 }
 
-function docTypeLabel(docType: string): string {
-  switch (docType) {
-    case 'default': return '通用文档'
-    case 'short_text': return '短文本'
-    case 'paper': return '论文'
-    case 'contract': return '合同'
-    case 'novel': return '小说'
-    default: return docType
-  }
+function closeEditModelModal() {
+  showEditModelModal.value = false
+  editingModelKey.value = null
+  editModelForm.value = { description: '', visionSupported: false }
+  editModelError.value = ''
 }
 
-function formatFileSize(size: number): string {
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  return `${(size / 1024 / 1024).toFixed(1)} MB`
+async function submitEditModelKey() {
+  if (!editingModelKey.value) return
+  editModelError.value = ''
+  savingModelKey.value = true
+  try {
+    const capabilities: string[] = []
+    if (isChatKeyType(editingModelKey.value.keyType) && editModelForm.value.visionSupported) {
+      capabilities.push('vision')
+    }
+    const res = await updateModelKey(editingModelKey.value.id, {
+      description: editModelForm.value.description.trim(),
+      capabilities,
+    })
+    if (res.success && res.data) {
+      const index = modelKeyList.value.findIndex((k) => k.id === editingModelKey.value!.id)
+      if (index !== -1) modelKeyList.value[index] = res.data
+      closeEditModelModal()
+      toastSuccess('保存成功')
+    } else {
+      editModelError.value = res.message || '保存失败'
+    }
+  } catch (e: any) {
+    editModelError.value = e.message || '保存失败'
+  } finally {
+    savingModelKey.value = false
+  }
 }
 
 // Function Call 相关方法
@@ -1979,7 +2129,7 @@ function loadSectionData(section: string) {
   switch (section) {
     case 'documents': loadKnowledgeBaseList(); break
     case 'agentOption': loadAgentOptionList(); break
-    case 'apikey': loadApiKeyList(); break
+    case 'apikey': loadApiKeyList(); loadAgentOptionList(); break
     case 'bizConfig': loadBizConfigList(); break
     case 'modelConfig': loadModelKeyList(); break
     case 'functionCall': loadFunctionCallList(); break
@@ -2846,7 +2996,7 @@ onMounted(() => {
 .apikey-list .list-header,
 .apikey-list .account-item {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 60px;
+  grid-template-columns: 1fr 1fr 1.2fr 1fr 60px;
   align-items: center;
   gap: 1rem;
   padding-left: 1.25rem;
@@ -2854,11 +3004,18 @@ onMounted(() => {
 }
 
 .apikey-list {
-  min-width: 480px;
+  min-width: 640px;
 }
 
 .apikey-list .list-header span:last-child {
   text-align: center;
+}
+
+.apikey-agent-select {
+  width: 100%;
+  max-width: 220px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
 }
 
 .apikey-masked {
@@ -3351,6 +3508,20 @@ onMounted(() => {
 .model-status-badge.is-enabled {
   background: transparent;
   color: #16a34a;
+}
+
+.capability-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.capability-toggle input[type='checkbox']:disabled + * {
+  opacity: 0.6;
 }
 
 .toggle-btn {

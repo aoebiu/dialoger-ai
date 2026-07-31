@@ -1,8 +1,12 @@
 package info.mengnan.dialogerai.server.param.apiKey;
 
+import info.mengnan.dialogerai.common.param.ModelCapability;
 import info.mengnan.dialogerai.repository.entity.ChatApiKey;
 import lombok.Data;
+
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Data
 public class ModelApiKeyResponse {
@@ -12,6 +16,7 @@ public class ModelApiKeyResponse {
     private String modelProvider;
     private String keyType;
     private String description;
+    private List<String> capabilities;
     private Boolean enabled;
     private String maskedApiKey;
     private LocalDateTime createdAt;
@@ -23,6 +28,9 @@ public class ModelApiKeyResponse {
         response.setModelProvider(key.getModelProvider());
         response.setKeyType(key.getKeyType());
         response.setDescription(key.getDescription());
+        response.setCapabilities(ModelCapability.parse(key.getCapabilities()).stream()
+                .map(ModelCapability::n)
+                .collect(Collectors.toList()));
         response.setEnabled(key.getEnabled() == null ? true : key.getEnabled());
         response.setCreatedAt(key.getCreatedAt());
         return response;

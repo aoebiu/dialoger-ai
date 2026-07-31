@@ -1,4 +1,4 @@
-import { $get, $post, $delete } from './request'
+import { $get, $post, $put, $delete } from './request'
 
 export interface ApiKeyListItem {
   id: number
@@ -8,6 +8,8 @@ export interface ApiKeyListItem {
   lastUsedAt: string | null
   createdAt: string | null
   apiKey: string
+  chatAgentOptionId: number | null
+  chatAgentOptionName: string | null
 }
 
 export interface CreateApiKeyResult {
@@ -15,18 +17,26 @@ export interface CreateApiKeyResult {
   apiKey: string
   name: string | null
   expiresAt: string | null
+  chatAgentOptionId: number | null
+  chatAgentOptionName: string | null
+}
+
+export interface CreateApiKeyBody {
+  name?: string
+  expiresInDays?: number
+  chatAgentOptionId?: number | null
 }
 
 export function getApiKeyList() {
   return $get<ApiKeyListItem[]>('/apikey/list')
 }
 
-export function createApiKey(params?: { name?: string; expiresInDays?: number }) {
-  const search = new URLSearchParams()
-  if (params?.name != null) search.set('name', params.name)
-  if (params?.expiresInDays != null) search.set('expiresInDays', String(params.expiresInDays))
-  const qs = search.toString()
-  return $post<CreateApiKeyResult>(`/apikey/create${qs ? '?' + qs : ''}`)
+export function createApiKey(body?: CreateApiKeyBody) {
+  return $post<CreateApiKeyResult>('/apikey/create', body ?? {})
+}
+
+export function updateApiKey(id: number, body: { chatAgentOptionId: number | null }) {
+  return $put(`/apikey/${id}`, body)
 }
 
 export function disableApiKey(id: number) {
