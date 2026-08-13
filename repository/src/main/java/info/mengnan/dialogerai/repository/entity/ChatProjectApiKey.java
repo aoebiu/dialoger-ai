@@ -31,6 +31,12 @@ public class ChatProjectApiKey {
     private String name;
 
     /**
+     * 绑定的 Agent 配置 ID（chat_agent_option.id）
+     * 供多模态图片识别等场景使用，用于定位该 Agent 绑定的 IMAGE 模型
+     */
+    private Long chatAgentOptionId;
+
+    /**
      * 状态：1-启用，0-禁用
      */
     private Integer status;

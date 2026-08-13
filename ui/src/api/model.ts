@@ -6,6 +6,7 @@ export interface ModelApiKeyItem {
   modelProvider: string
   keyType: string
   description?: string
+  capabilities: string[]
   enabled: boolean
   maskedApiKey: string
   createdAt: string | null
@@ -21,6 +22,7 @@ export function createModelKey(params: {
   keyType: string
   apiKey: string
   description?: string
+  capabilities?: string[]
 }) {
   const search = new URLSearchParams()
   search.set('modelName', params.modelName)
@@ -29,6 +31,11 @@ export function createModelKey(params: {
   search.set('apiKey', params.apiKey)
   if (params.description) {
     search.set('description', params.description)
+  }
+  if (params.capabilities && params.capabilities.length > 0) {
+    for (const cap of params.capabilities) {
+      search.append('capabilities', cap)
+    }
   }
   return $post<ModelApiKeyItem>(`/model/create?${search.toString()}`)
 }
@@ -39,6 +46,20 @@ export function deleteModelKey(id: number) {
 
 export function toggleModelKeyEnabled(id: number) {
   return $put<ModelApiKeyItem>(`/model/${id}/toggle`)
+}
+
+export function updateModelKeyCapabilities(id: number, capabilities: string[]) {
+  return $put<ModelApiKeyItem>(`/model/${id}/capabilities`, capabilities)
+}
+
+export function updateModelKey(
+  id: number,
+  params: { description?: string; capabilities?: string[] },
+) {
+  return $put<ModelApiKeyItem>(`/model/${id}`, {
+    description: params.description ?? null,
+    capabilities: params.capabilities ?? [],
+  })
 }
 
 export type ParamValueType =

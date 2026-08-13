@@ -108,6 +108,7 @@ public class ModelConfigService {
         config.setApiKey(apiKey.getApiKey());
         config.setModelProvider(apiKey.getModelProvider());
         config.setKeyType(apiKey.getKeyType());
+        config.setCapabilities(apiKey.getCapabilities());
         if (paramsJson != null && !paramsJson.isBlank()) {
             config.setParams(new JSONObject(paramsJson));
         }

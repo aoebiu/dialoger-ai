@@ -37,6 +37,7 @@ CREATE TABLE `chat_team`
     `name`                  varchar(100)      DEFAULT NULL COMMENT '团队名称',
     `share_code`            varchar(32)       DEFAULT NULL COMMENT '团队分享码，用于注册绑定',
     `default_chat_model_id` bigint(20)        DEFAULT NULL COMMENT '默认聊天模型ID',
+    `default_image_model_id` bigint(20)       DEFAULT NULL COMMENT '默认图像模型ID',
     `created_at`            timestamp  NULL     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at`            timestamp  NULL     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
@@ -81,6 +82,7 @@ CREATE TABLE `chat_api_key`
     `model_name`     varchar(255) NOT NULL COMMENT '模型名称',
     `model_provider` varchar(255)          DEFAULT NULL COMMENT '模型提供商',
     `description`    varchar(500)          DEFAULT NULL COMMENT '模型描述',
+    `capabilities`   varchar(255)          DEFAULT NULL COMMENT '模型附加能力（逗号分隔），如 vision',
     `enabled`        tinyint(1)            DEFAULT 1 COMMENT '是否启用（1启用 0禁用）',
     `base_url`       varchar(500)          DEFAULT NULL COMMENT 'API Base URL',
     `created_at`     timestamp    NULL     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -179,6 +181,7 @@ CREATE TABLE `chat_project_api_key`
     `api_key`      varchar(255) NOT NULL COMMENT 'API Key，以 sk- 开头',
     `member_id`    bigint(20)   NOT NULL COMMENT '所属用户ID',
     `name`         varchar(100)      DEFAULT NULL COMMENT 'API Key 名称/描述',
+    `chat_agent_option_id` bigint(20) DEFAULT NULL COMMENT '绑定的 Agent 配置 ID，用于多模态图片识别等定位对应模型',
     `status`       int(11)           DEFAULT '1' COMMENT '状态: 1-启用, 0-禁用',
     `expires_at`   timestamp    NULL DEFAULT NULL COMMENT '过期时间（可选）',
     `last_used_at` timestamp    NULL DEFAULT NULL COMMENT '最后使用时间',
@@ -443,4 +446,22 @@ CREATE TABLE `document_info`
 -- ALTER TABLE `chat_team`
 --     ADD COLUMN `share_code` varchar(32) DEFAULT NULL COMMENT '团队分享码，用于注册绑定' AFTER `name`,
 --     ADD UNIQUE KEY `uk_share_code` (`share_code`);
+-- ----------------------------
+
+-- ----------------------------
+-- 已有库升级：为 chat_team 增加默认图像模型字段（全新安装可忽略，建表语句已包含）
+-- ALTER TABLE `chat_team`
+--     ADD COLUMN `default_image_model_id` bigint(20) DEFAULT NULL COMMENT '默认图像模型ID' AFTER `default_chat_model_id`;
+-- ----------------------------
+
+-- ----------------------------
+-- 已有库升级：为 chat_project_api_key 增加绑定 Agent 字段（全新安装可忽略，建表语句已包含）
+-- ALTER TABLE `chat_project_api_key`
+--     ADD COLUMN `chat_agent_option_id` bigint(20) DEFAULT NULL COMMENT '绑定的 Agent 配置 ID' AFTER `name`;
+-- ----------------------------
+
+-- ----------------------------
+-- 已有库升级：为 chat_api_key 增加模型能力字段（全新安装可忽略，建表语句已包含）
+-- ALTER TABLE `chat_api_key`
+--     ADD COLUMN `capabilities` varchar(255) DEFAULT NULL COMMENT '模型附加能力（逗号分隔），如 vision' AFTER `description`;
 -- ----------------------------

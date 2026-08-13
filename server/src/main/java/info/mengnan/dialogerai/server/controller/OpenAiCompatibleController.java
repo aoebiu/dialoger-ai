@@ -1,28 +1,37 @@
 package info.mengnan.dialogerai.server.controller;
 
+import info.mengnan.dialogerai.common.param.ModelCapability;
+import info.mengnan.dialogerai.common.param.ModelType;
+import info.mengnan.dialogerai.rag.ChatService;
+import info.mengnan.dialogerai.rag.config.ModelConfig;
 import info.mengnan.dialogerai.rag.handler.StreamingResponseHandler;
 import info.mengnan.dialogerai.repository.entity.ChatProjectApiKey;
 import info.mengnan.dialogerai.repository.repo.ProjectApiKeyRepository;
 import info.mengnan.dialogerai.server.core.DefaultAiServiceAssembler;
-import info.mengnan.dialogerai.server.param.chat.ChatRequest;
-import info.mengnan.dialogerai.rag.ChatService;
+import info.mengnan.dialogerai.server.exception.BusinessException;
 import info.mengnan.dialogerai.server.handler.OpenAiStreamingResponseHandler;
+import info.mengnan.dialogerai.server.param.chat.ChatRequest;
 import info.mengnan.dialogerai.server.param.openai.OpenApiChatRequest;
 import info.mengnan.dialogerai.server.service.ImageProcessingService;
-import info.mengnan.dialogerai.server.service.MemberService;
 import info.mengnan.dialogerai.server.service.ModelConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.UUID;
 
 import static info.mengnan.dialogerai.rag.config.DefaultModelConfig.DEFAULT_OPTION_ID;
 import static info.mengnan.dialogerai.rag.config.DefaultModelConfig.DEFAULT_SESSION;
-import static info.mengnan.dialogerai.server.param.ErrorCode.MODEL_DEFAULT_REQUIRED;
+import static info.mengnan.dialogerai.server.param.ErrorCode.OPENAI_AGENT_VISION_CHAT_MODEL_MISSING;
+import static info.mengnan.dialogerai.server.param.ErrorCode.OPENAI_API_KEY_UNBOUND_AGENT;
+import static info.mengnan.dialogerai.server.param.ErrorCode.OPENAI_MESSAGES_EMPTY;
+import static info.mengnan.dialogerai.server.param.ErrorCode.OPENAI_STREAM_ONLY;
 
 /**
  * OpenAI 兼容的 API 控制器
@@ -37,7 +46,6 @@ public class OpenAiCompatibleController {
     private final ChatService chatService;
     private final ProjectApiKeyRepository projectApiKeyService;
     private final ImageProcessingService imageProcessingService;
-    private final MemberService memberService;
     private final ModelConfigService modelConfigService;
 
     /**
@@ -55,29 +63,51 @@ public class OpenAiCompatibleController {
 
         String apiKey = authorization.replace("Bearer ", "").trim();
         if (!request.getStream()) {
-            return Flux.error(new UnsupportedOperationException("当前仅支持流式响应,请设置 stream=true"));
+            return Flux.error(new BusinessException(OPENAI_STREAM_ONLY));
         }
 
         if (request.getMessages() == null || request.getMessages().isEmpty()) {
-            return Flux.error(new IllegalArgumentException("messages 不能为空"));
+            return Flux.error(new BusinessException(OPENAI_MESSAGES_EMPTY));
         }
 
-        ChatRequest chatRequest = buildInternalRequest(request);
-
         ChatProjectApiKey projectApiKey = projectApiKeyService.findByApiKey(apiKey);
-        chatRequest.setMemberId(projectApiKey.getMemberId());
+        boolean hasImageContent = messagesHaveImage(request);
+        ModelConfig imageModelConfig = null;
+        if (hasImageContent) {
+            if (projectApiKey.getChatAgentOptionId() == null) {
+                return Flux.error(new BusinessException(OPENAI_API_KEY_UNBOUND_AGENT));
+            }
+            Map<ModelType, ModelConfig> configs =
+                    modelConfigService.loadModelConfigsByAgentOptionId(projectApiKey.getChatAgentOptionId());
+            imageModelConfig = configs.get(ModelType.CHAT);
+            if (imageModelConfig == null || !ModelCapability.contains(imageModelConfig.getCapabilities(), ModelCapability.VISION)) {
+                return Flux.error(new BusinessException(OPENAI_AGENT_VISION_CHAT_MODEL_MISSING,
+                        OPENAI_AGENT_VISION_CHAT_MODEL_MISSING.getMessage()
+                                + ", agentOptionId=" + projectApiKey.getChatAgentOptionId()));
+            }
+        }
 
-//        MemberTeamContext ctx = memberService.resolveTeamContext(chatRequest.getMemberId());
-//        Long ownerId = ctx.ownerId();
-//        String defaultModelName = modelConfigService.findDefaultDirectChatModelName(ownerId);
-//        if (defaultModelName == null || defaultModelName.isBlank())
-//            return Flux.error(new IllegalArgumentException(MODEL_DEFAULT_REQUIRED.getMessage()));
+        ChatRequest chatRequest = buildInternalRequest(request, imageModelConfig);
+        chatRequest.setMemberId(projectApiKey.getMemberId());
 
         try {
             return streamResponse(chatRequest, request.getModel());
         } catch (Exception e) {
             return Flux.error(e);
         }
+    }
+
+    private boolean messagesHaveImage(OpenApiChatRequest request) {
+        if (request.getMessages() == null) return false;
+        for (OpenApiChatRequest.Message msg : request.getMessages()) {
+            if (CollectionUtils.isEmpty(msg.getContentParts())) continue;
+            for (OpenApiChatRequest.Message.ContentPart part : msg.getContentParts()) {
+                if (part.getImageUrl() != null && StringUtils.isNotEmpty(part.getImageUrl().getUrl())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -109,7 +139,7 @@ public class OpenAiCompatibleController {
     /**
      * 将 OpenAI 请求转换为内部请求格式
      */
-    private ChatRequest buildInternalRequest(OpenApiChatRequest openAiRequest) {
+    private ChatRequest buildInternalRequest(OpenApiChatRequest openAiRequest, ModelConfig imageModelConfig) {
         ChatRequest chatRequest = new ChatRequest();
         chatRequest.setInDB(false);
         chatRequest.setSessionId(DEFAULT_SESSION);
@@ -119,14 +149,14 @@ public class OpenAiCompatibleController {
         StringBuilder messageBuilder = new StringBuilder();
         for (OpenApiChatRequest.Message msg : openAiRequest.getMessages()) {
             // 优先使用多模态内容，如果不存在则使用传统内容
-            if (msg.getContentParts() != null && !msg.getContentParts().isEmpty()) {
+            if (CollectionUtils.isNotEmpty(msg.getContentParts())) {
                 for (OpenApiChatRequest.Message.ContentPart part : msg.getContentParts()) {
                     if ("text".equals(part.getType()) && part.getText() != null) {
                         messageBuilder.append(part.getText()).append(" ");
                     } else if (part.getImageUrl() != null) {
                         String imageUrl = part.getImageUrl().getUrl();
-                        if (imageUrl != null && !imageUrl.isEmpty()) {
-                            String imageDescription = imageProcessingService.processImageUrl(imageUrl);
+                        if (StringUtils.isNotEmpty(imageUrl)) {
+                            String imageDescription = imageProcessingService.processImageUrl(imageUrl, imageModelConfig);
                             messageBuilder.append(imageDescription).append(" ");
                         }
                     }

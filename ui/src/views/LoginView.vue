@@ -17,6 +17,7 @@
           type="button"
           class="mode-tab"
           :class="{ active: !isRegister }"
+          :disabled="loading"
           @click="switchMode(false)"
         >
           登录
@@ -25,6 +26,7 @@
           type="button"
           class="mode-tab"
           :class="{ active: isRegister }"
+          :disabled="loading"
           @click="switchMode(true)"
         >
           注册
@@ -208,6 +210,10 @@ async function onSubmit() {
   color: #fff;
   background: var(--color-button-primary);
   border-color: var(--color-button-primary);
+}
+.mode-tab:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 .form {
   display: flex;

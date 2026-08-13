@@ -26,6 +26,8 @@ public class ChatTeam {
 
     private Long defaultChatModelId;
 
+    private Long defaultImageModelId;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

@@ -38,6 +38,11 @@ public class ModelConfig {
     private String keyType;
 
     /**
+     * 模型附加能力（逗号分隔），如 "vision"
+     */
+    private String capabilities;
+
+    /**
      * 模型调参参数
      */
     private JSONObject params = new JSONObject();

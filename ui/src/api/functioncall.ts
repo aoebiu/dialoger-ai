@@ -83,3 +83,7 @@ export interface FunctionCallGenerateTestCasesForm {
 export function generateTestCasesForTool(id: number, params: FunctionCallGenerateTestCasesForm) {
   return $post<{ testCases: string }>(`/functioncall/${id}/generate/testcases`, params)
 }
+
+export function checkFunctionCallNameExists(name: string) {
+  return $get<{ exists: boolean }>(`/functioncall/check/name?name=${encodeURIComponent(name)}`)
+}

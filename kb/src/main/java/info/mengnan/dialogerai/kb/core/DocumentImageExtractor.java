@@ -1,7 +1,6 @@
 package info.mengnan.dialogerai.kb.core;
 
 import info.mengnan.dialogerai.kb.param.DocumentImage;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFPictureData;
@@ -16,10 +15,7 @@ import java.util.*;
  * 文档图片提取工具
  */
 @Slf4j
-@RequiredArgsConstructor
 public class DocumentImageExtractor {
-
-    private final ImageTextGenerator imageTextGenerator;
 
     /**
      * 从 PDF 提取图片
@@ -35,9 +31,10 @@ public class DocumentImageExtractor {
      * 从 Word 文档 (.docx) 提取图片
      *
      * @param filePath Word 文件路径
+     * @param imageTextGenerator 图片描述生成器（已绑定所需的模型配置）
      * @return 图片信息列表
      */
-    public List<DocumentImage> extractImagesFromWord(Path filePath) {
+    public List<DocumentImage> extractImagesFromWord(Path filePath, ImageTextGenerator imageTextGenerator) {
         List<DocumentImage> images = new ArrayList<>();
 
         try (FileInputStream fis = new FileInputStream(filePath.toFile());
@@ -81,9 +78,10 @@ public class DocumentImageExtractor {
      * 从 PowerPoint 文档 (.pptx) 提取图片
      *
      * @param filePath PowerPoint 文件路径
+     * @param imageTextGenerator 图片描述生成器（已绑定所需的模型配置）
      * @return 图片信息列表
      */
-    public List<DocumentImage> extractImagesFromPowerPoint(Path filePath) {
+    public List<DocumentImage> extractImagesFromPowerPoint(Path filePath, ImageTextGenerator imageTextGenerator) {
         List<DocumentImage> images = new ArrayList<>();
 
         try (FileInputStream fis = new FileInputStream(filePath.toFile());
@@ -137,13 +135,14 @@ public class DocumentImageExtractor {
      *
      * @param filePath 文件路径
      * @param fileExtension 文件扩展名
+     * @param imageTextGenerator 图片描述生成器（已绑定所需的模型配置）
      * @return 图片信息列表
      */
-    public List<DocumentImage> extractImages(Path filePath, String fileExtension) {
+    public List<DocumentImage> extractImages(Path filePath, String fileExtension, ImageTextGenerator imageTextGenerator) {
         return switch (fileExtension.toLowerCase()) {
             case ".pdf" -> extractImagesFromPDF(filePath);
-            case ".docx" -> extractImagesFromWord(filePath);
-            case ".pptx" -> extractImagesFromPowerPoint(filePath);
+            case ".docx" -> extractImagesFromWord(filePath, imageTextGenerator);
+            case ".pptx" -> extractImagesFromPowerPoint(filePath, imageTextGenerator);
             default -> {
                 log.info("File type {} does not support image extraction", fileExtension);
                 yield Collections.emptyList();

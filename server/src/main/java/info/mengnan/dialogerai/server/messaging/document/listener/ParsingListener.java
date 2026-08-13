@@ -1,8 +1,11 @@
 package info.mengnan.dialogerai.server.messaging.document.listener;
 
 import dev.langchain4j.data.document.Document;
+import info.mengnan.dialogerai.kb.core.ImageTextGenerator;
 import info.mengnan.dialogerai.kb.core.SequentialDocumentExtractor;
 import info.mengnan.dialogerai.kb.param.ContentElement;
+import info.mengnan.dialogerai.rag.config.ModelConfig;
+import info.mengnan.dialogerai.rag.service.DirectModelInvoker;
 import info.mengnan.dialogerai.repository.entity.DocumentInfo;
 import info.mengnan.dialogerai.repository.enums.DocumentStatus;
 import info.mengnan.dialogerai.repository.repo.DocumentInfoRepository;
@@ -10,8 +13,11 @@ import info.mengnan.dialogerai.server.core.DocumentEmbedding;
 import info.mengnan.dialogerai.server.core.storage.FileUploadStorage;
 import info.mengnan.dialogerai.server.messaging.document.event.DocumentParsedEvent;
 import info.mengnan.dialogerai.server.messaging.document.event.DocumentUploadedEvent;
+import info.mengnan.dialogerai.server.param.team.MemberTeamContext;
 import info.mengnan.dialogerai.server.service.DocumentProcessService;
 import info.mengnan.dialogerai.server.service.KnowledgeBaseBuildService;
+import info.mengnan.dialogerai.server.service.MemberService;
+import info.mengnan.dialogerai.server.service.ModelConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -40,6 +46,9 @@ public class ParsingListener {
     private final KnowledgeBaseBuildService KnowledgeBaseBuildService;
     private final ApplicationEventPublisher eventPublisher;
     private final FileUploadStorage fileStorage;
+    private final MemberService memberService;
+    private final ModelConfigService modelConfigService;
+    private final DirectModelInvoker directModelInvoker;
 
     @Async("docProcessPool")
     @EventListener
@@ -52,7 +61,9 @@ public class ParsingListener {
             refreshKbBuildProgress(documentId);
 
             Path filePath = fileStorage.resolvePath(event.getStoredName());
-            List<ContentElement> elements = sequentialExtractor.extractContentSequentially(filePath, event.getFileType());
+            ImageTextGenerator imageTextGenerator = buildImageTextGenerator(event.getMemberId());
+            List<ContentElement> elements = sequentialExtractor.extractContentSequentially(
+                    filePath, event.getFileType(), imageTextGenerator);
             Document document = documentEmbedding.parseDocument(filePath, event.getFileType());
             String parsedText = document.text();
             int charCount = parsedText != null ? parsedText.length() : 0;
@@ -91,6 +102,20 @@ public class ParsingListener {
                 log.warn("temporary file deletion failed: storedName={}", event.getStoredName());
             }
         }
+    }
+
+    private ImageTextGenerator buildImageTextGenerator(Long memberId) {
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null) {
+            log.warn("Skip image description: team context missing, memberId={}", memberId);
+            return (data, prompt, mimeType) -> "[图片]";
+        }
+        ModelConfig modelConfig = modelConfigService.findModelById(ctx.defaultImageModelId());
+        if (modelConfig == null) {
+            log.warn("Skip image description: default image model not configured, teamId={}", ctx.teamId());
+            return (data, prompt, mimeType) -> "[图片]";
+        }
+        return (data, prompt, mimeType) -> directModelInvoker.imageToText(data, prompt, mimeType, modelConfig);
     }
 
     private void refreshKbBuildProgress(Long documentId) {

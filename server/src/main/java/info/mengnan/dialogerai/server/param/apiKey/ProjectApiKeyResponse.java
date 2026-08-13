@@ -17,6 +17,16 @@ public class ProjectApiKeyResponse {
     private String name;
 
     /**
+     * 绑定的 Agent 配置 ID
+     */
+    private Long chatAgentOptionId;
+
+    /**
+     * 绑定的 Agent 配置名称（便于列表直接展示）
+     */
+    private String chatAgentOptionName;
+
+    /**
      * 状态：1-启用，0-禁用
      */
     private Integer status;

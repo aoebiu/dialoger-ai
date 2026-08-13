@@ -2,7 +2,6 @@ package info.mengnan.dialogerai.kb.core;
 
 import info.mengnan.dialogerai.kb.param.ContentElement;
 import info.mengnan.dialogerai.kb.param.DocumentImage;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xwpf.usermodel.*;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
@@ -21,31 +20,29 @@ import java.util.*;
  * 保持文本和图片在原文档中的相对位置
  */
 @Slf4j
-@RequiredArgsConstructor
 public class SequentialDocumentExtractor {
-
-    private final ImageTextGenerator imageTextGenerator;
 
     /**
      * 从 Word 文档按顺序提取内容
      *
      * @param filePath Word 文件路径
+     * @param imageTextGenerator 图片描述生成器（已绑定所需的模型配置）
      * @return 内容元素列表，保持原始顺序
      */
-    public List<ContentElement> extractWordContentSequentially(Path filePath) {
+    public List<ContentElement> extractWordContentSequentially(Path filePath, ImageTextGenerator imageTextGenerator) {
         List<ContentElement> elements = new ArrayList<>();
         int position = 0;
 
         try (FileInputStream fis = new FileInputStream(filePath.toFile());
              XWPFDocument document = new XWPFDocument(fis)) {
              // 遍历所有段落
-             position = getPosition(elements, position, document.getParagraphs(), document);
+             position = getPosition(elements, position, document.getParagraphs(), document, imageTextGenerator);
 
             // 处理表格中的内容
             for (XWPFTable table : document.getTables()) {
                 for (XWPFTableRow row : table.getRows()) {
                     for (XWPFTableCell cell : row.getTableCells()) {
-                        position = getPosition(elements, position, cell.getParagraphs(), document);
+                        position = getPosition(elements, position, cell.getParagraphs(), document, imageTextGenerator);
                     }
                 }
             }
@@ -58,7 +55,7 @@ public class SequentialDocumentExtractor {
         return elements;
     }
 
-    private int getPosition(List<ContentElement> elements, int position, List<XWPFParagraph> paragraphs, XWPFDocument document) {
+    private int getPosition(List<ContentElement> elements, int position, List<XWPFParagraph> paragraphs, XWPFDocument document, ImageTextGenerator imageTextGenerator) {
         for (XWPFParagraph paragraph : paragraphs) {
             String paragraphText = paragraph.getText();
 
@@ -72,7 +69,7 @@ public class SequentialDocumentExtractor {
                 for (XWPFPicture picture : run.getEmbeddedPictures()) {
                     XWPFPictureData pictureData = picture.getPictureData();
                     if (pictureData != null) {
-                        DocumentImage image = createDocumentImage(pictureData, position);
+                        DocumentImage image = createDocumentImage(pictureData, position, imageTextGenerator);
                         elements.add(ContentElement.ofImage(image, position++));
                     }
                 }
@@ -85,9 +82,10 @@ public class SequentialDocumentExtractor {
      * 从 PowerPoint 按顺序提取内容
      *
      * @param filePath PowerPoint 文件路径
+     * @param imageTextGenerator 图片描述生成器（已绑定所需的模型配置）
      * @return 内容元素列表，保持原始顺序
      */
-    public List<ContentElement> extractPowerPointContentSequentially(Path filePath) {
+    public List<ContentElement> extractPowerPointContentSequentially(Path filePath, ImageTextGenerator imageTextGenerator) {
         List<ContentElement> elements = new ArrayList<>();
         int position = 0;
 
@@ -101,7 +99,7 @@ public class SequentialDocumentExtractor {
                     // 处理图片
                     if (shape instanceof XSLFPictureShape pictureShape) {
                         try {
-                            DocumentImage image = createPowerPointImage(pictureShape, position);
+                            DocumentImage image = createPowerPointImage(pictureShape, position, imageTextGenerator);
                             elements.add(ContentElement.ofImage(image, position++));
                         } catch (Exception e) {
                             log.warn("Failed to extract picture from PowerPoint: {}", e.getMessage());
@@ -134,12 +132,13 @@ public class SequentialDocumentExtractor {
      *
      * @param filePath 文件路径
      * @param fileExtension 文件扩展名
+     * @param imageTextGenerator 图片描述生成器（已绑定所需的模型配置）
      * @return 内容元素列表
      */
-    public List<ContentElement> extractContentSequentially(Path filePath, String fileExtension) {
+    public List<ContentElement> extractContentSequentially(Path filePath, String fileExtension, ImageTextGenerator imageTextGenerator) {
         return switch (fileExtension.toLowerCase()) {
-            case ".docx" -> extractWordContentSequentially(filePath);
-            case ".pptx" -> extractPowerPointContentSequentially(filePath);
+            case ".docx" -> extractWordContentSequentially(filePath, imageTextGenerator);
+            case ".pptx" -> extractPowerPointContentSequentially(filePath, imageTextGenerator);
             default -> {
                 log.info("File type {} does not support sequential content extraction", fileExtension);
                 yield Collections.emptyList();
@@ -150,7 +149,7 @@ public class SequentialDocumentExtractor {
     /**
      * 为 Word 文档中的图片创建 DocumentImage 对象
      */
-    private DocumentImage createDocumentImage(XWPFPictureData pictureData, int position) {
+    private DocumentImage createDocumentImage(XWPFPictureData pictureData, int position, ImageTextGenerator imageTextGenerator) {
         String pictureName = pictureData.getFileName();
         String extension = "png";
         if (pictureName != null && pictureName.contains(".")) {
@@ -172,7 +171,7 @@ public class SequentialDocumentExtractor {
     /**
      * 为 PowerPoint 中的图片创建 DocumentImage 对象
      */
-    private DocumentImage createPowerPointImage(XSLFPictureShape pictureData, int position) {
+    private DocumentImage createPowerPointImage(XSLFPictureShape pictureData, int position, ImageTextGenerator imageTextGenerator) {
         String pictureName = pictureData.getPictureData().getFileName();
         String extension = "png";
         if (pictureName.contains(".")) {

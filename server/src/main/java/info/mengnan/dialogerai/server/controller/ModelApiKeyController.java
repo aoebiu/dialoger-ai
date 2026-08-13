@@ -4,12 +4,15 @@ import cn.dev33.satoken.stp.StpUtil;
 import info.mengnan.dialogerai.rag.provider.ModelParamSchemaRegistry;
 import info.mengnan.dialogerai.repository.entity.ChatApiKey;
 import info.mengnan.dialogerai.server.param.R;
+import info.mengnan.dialogerai.server.param.apiKey.ModelApiKeyUpdateRequest;
 import info.mengnan.dialogerai.server.service.MemberService;
 import info.mengnan.dialogerai.server.param.team.MemberTeamContext;
 import info.mengnan.dialogerai.server.service.ModelApiKeyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 import static info.mengnan.dialogerai.server.param.ErrorCode.*;
 
@@ -43,13 +46,48 @@ public class ModelApiKeyController {
                           @RequestParam(name = "modelProvider") String modelProvider,
                           @RequestParam(name = "keyType") String keyType,
                           @RequestParam(name = "apiKey") String apiKey,
-                          @RequestParam(name = "description", required = false) String description) {
+                          @RequestParam(name = "description", required = false) String description,
+                          @RequestParam(name = "capabilities", required = false) List<String> capabilities) {
         Long memberId = StpUtil.getLoginIdAsLong();
         MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
         if (ctx == null || !ctx.isOwner())
             return R.error(MEMBER_MANAGE_DENIED);
 
-        return R.ok(modelApiKeyService.create(ctx.ownerId(), modelName, modelProvider, keyType, apiKey, description));
+        return R.ok(modelApiKeyService.create(ctx.ownerId(), modelName, modelProvider, keyType, apiKey, description, capabilities));
+    }
+
+    @PutMapping("/{id}/capabilities")
+    public R updateCapabilities(@PathVariable(name = "id") Long id,
+                                @RequestBody(required = false) List<String> capabilities) {
+        Long memberId = StpUtil.getLoginIdAsLong();
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null || !ctx.isOwner())
+            return R.error(MEMBER_MANAGE_DENIED);
+
+        ChatApiKey chatApiKey = modelApiKeyService.findById(id);
+        if (chatApiKey == null)
+            return R.error(MODEL_KEY_NOT_FOUND);
+        if (!memberService.isTeamMember(ctx, chatApiKey.getMemberId()))
+            return R.error(MODEL_KEY_DELETE_DENIED);
+
+        return R.ok(modelApiKeyService.updateCapabilities(id, capabilities));
+    }
+
+    @PutMapping("/{id}")
+    public R updateModel(@PathVariable(name = "id") Long id,
+                        @RequestBody ModelApiKeyUpdateRequest request) {
+        Long memberId = StpUtil.getLoginIdAsLong();
+        MemberTeamContext ctx = memberService.resolveTeamContext(memberId);
+        if (ctx == null || !ctx.isOwner())
+            return R.error(MEMBER_MANAGE_DENIED);
+
+        ChatApiKey chatApiKey = modelApiKeyService.findById(id);
+        if (chatApiKey == null)
+            return R.error(MODEL_KEY_NOT_FOUND);
+        if (!memberService.isTeamMember(ctx, chatApiKey.getMemberId()))
+            return R.error(MODEL_KEY_DELETE_DENIED);
+
+        return R.ok(modelApiKeyService.update(id, request.getDescription(), request.getCapabilities()));
     }
 
     @DeleteMapping("/{id}")

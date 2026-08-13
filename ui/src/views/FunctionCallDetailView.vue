@@ -358,7 +358,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getFunctionCallById, createFunctionCall, updateFunctionCall, generateToolMetadata, testFunctionCall, generateTestCasesForTool } from '@/api/functioncall'
+import { getFunctionCallById, createFunctionCall, updateFunctionCall, generateToolMetadata, testFunctionCall, generateTestCasesForTool, checkFunctionCallNameExists } from '@/api/functioncall'
 import type { FunctionCallForm, FunctionCallItem, PropertyDetail } from '@/api/functioncall'
 import { getTaskInfo } from '@/api/task'
 import type { AsyncTaskStep } from '@/api/task'
@@ -588,6 +588,19 @@ function fillFormFromResult(resultJson: string) {
   }
 }
 
+async function checkAndWarnIfNameExists() {
+  if (!isEdit.value && functionCallForm.value.name.trim()) {
+    try {
+      const res = await checkFunctionCallNameExists(functionCallForm.value.name.trim())
+      if (res.success && res.data?.exists) {
+        formError.value = `⚠️ 工具名称"${functionCallForm.value.name}"已存在。请修改名称后再保存，或者修改后缀如 ${functionCallForm.value.name}_v2`
+      }
+    } catch {
+      // 检查失败不阻断
+    }
+  }
+}
+
 async function handleGenerateScript() {
   formError.value = ''
   generateDone.value = false
@@ -635,6 +648,8 @@ async function handleGenerateScript() {
           generatingSteps.value[2] = { step: 3, label: '填充结果', status: 'completed' }
           generatingTaskId.value = null
           generateDone.value = true
+          // 检查生成的工具名称是否已存在（非阻塞）
+          checkAndWarnIfNameExists()
         } else if (task.status === 'FAILED') {
           stopGeneratePoll()
           formError.value = task.errorMessage || '生成失败'
@@ -660,6 +675,19 @@ async function submitFunctionCall(exitAfter: boolean) {
   if (!functionCallForm.value.description.trim()) {
     formError.value = '请输入工具描述'
     return
+  }
+
+  // 检查工具名称是否已存在（仅在新建时检查）
+  if (!isEdit.value) {
+    try {
+      const res = await checkFunctionCallNameExists(functionCallForm.value.name.trim())
+      if (res.success && res.data?.exists) {
+        formError.value = '工具名称已存在，请修改名称后再保存'
+        return
+      }
+    } catch {
+      // 检查失败不阻断提交，让后端来验证
+    }
   }
 
   const validProps = functionCallProperties.value.filter((p) => p.key.trim())

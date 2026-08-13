@@ -62,6 +62,13 @@ public enum ErrorCode {
     FC_TEST_COUNT_INVALID("6005", "测试用例数量需在 1~20 之间"),
     FC_EXECUTE_FAILED("6006", "工具执行失败"),
     FC_GENERATE_FAILED("6007", "生成失败"),
+    FC_NAME_DUPLICATE("6008", "工具名称已存在，请修改名称后再保存"),
+
+    // OpenAI 兼容接口
+    OPENAI_STREAM_ONLY("9001", "当前仅支持流式响应,请设置 stream=true"),
+    OPENAI_MESSAGES_EMPTY("9002", "messages 不能为空"),
+    OPENAI_API_KEY_UNBOUND_AGENT("9003", "该 API Key 未绑定 Agent，无法处理图片内容"),
+    OPENAI_AGENT_VISION_CHAT_MODEL_MISSING("9004", "绑定的 Agent 未配置支持视觉理解的模型，无法处理图片内容"),
     ;
 
     private final String code;

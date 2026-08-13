@@ -46,6 +46,11 @@ public class ChatApiKey {
     private String description;
 
     /**
+     * 模型附加能力（逗号分隔），如 "vision"
+     */
+    private String capabilities;
+
+    /**
      * 是否启用（上线/下线）
      */
     private Boolean enabled;

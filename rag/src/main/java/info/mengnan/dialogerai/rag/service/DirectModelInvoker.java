@@ -1,5 +1,6 @@
 package info.mengnan.dialogerai.rag.service;
 
+import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
@@ -9,8 +10,6 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.input.Prompt;
 import info.mengnan.dialogerai.rag.config.ModelConfig;
 import info.mengnan.dialogerai.rag.container.factory.ChatModelFactory;
-import info.mengnan.dialogerai.rag.container.factory.UniversalModelFactory;
-import info.mengnan.dialogerai.rag.container.factory.ModelTypeMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 
@@ -80,9 +79,10 @@ public class DirectModelInvoker {
      * @param imageData 图片的二进制数据
      * @param promptTemplate 模板名称，用于指导图片分析
      * @param mimeType 图片的MIME类型 (e.g., "image/png", "image/jpeg")
+     * @param modelConfig 视觉模型配置
      * @return 图片内容的文本描述
      */
-    public String imageToText(byte[] imageData, String promptTemplate, String mimeType) {
+    public String imageToText(byte[] imageData, String promptTemplate, String mimeType, ModelConfig modelConfig) {
         if (imageData == null || imageData.length == 0) {
             log.error("Image data is null or empty");
             throw new IllegalArgumentException("Image data cannot be null or empty");
@@ -93,9 +93,13 @@ public class DirectModelInvoker {
             throw new IllegalArgumentException("Prompt template name cannot be null");
         }
 
-        // 将字节数组转换为Base64字符串
+        if (modelConfig == null) {
+            log.error("No model config provided for image-to-text");
+            throw new IllegalArgumentException("Model config cannot be null");
+        }
+
         String base64ImageData = Base64.getEncoder().encodeToString(imageData);
-        return imageToTextFromBase64(base64ImageData, promptTemplate, mimeType);
+        return imageToTextFromBase64(base64ImageData, promptTemplate, mimeType, modelConfig);
     }
 
 
@@ -104,23 +108,23 @@ public class DirectModelInvoker {
      * @param base64ImageData Base64编码的图片数据
      * @param promptTemplate 模板名称，用于指导图片分析
      * @param mimeType 图片的MIME类型 (e.g., "image/png", "image/jpeg")
+     * @param modelConfig 视觉模型配置
      * @return 图片内容的文本描述
      */
-    private String imageToTextFromBase64(String base64ImageData, String promptTemplate, String mimeType) {
+    private String imageToTextFromBase64(String base64ImageData, String promptTemplate, String mimeType, ModelConfig modelConfig) {
         Prompt prompt = promptTemplateManager.createPrompt(promptTemplate, null);
+        ChatModel chatModel = modelFactory.createChatModel(modelConfig);
 
         UserMessage userMessage = UserMessage.from(
                 TextContent.from(prompt.text()),
                 ImageContent.from(base64ImageData, mimeType)
         );
 
-        // 执行图片到文本的转换
         return executeWithRetry(() -> {
-            ChatRequest.Builder requestBuilder = ChatRequest.builder().messages(userMessage);
-            ChatRequest request = requestBuilder.build();
-//            ChatResponse response = chatModel.chat(request);
-//            return response.aiMessage().text();
-            return "";
+            ChatRequest request = ChatRequest.builder().messages(userMessage).build();
+            ChatResponse response = chatModel.chat(request);
+            AiMessage aiMessage = response.aiMessage();
+            return aiMessage != null && aiMessage.text() != null ? aiMessage.text() : "";
         }, MAX_ATTEMPTS, BACKOFF_DELAY_MS, BACKOFF_MULTIPLIER);
     }
 

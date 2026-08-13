@@ -12,6 +12,7 @@ public enum ModelType {
     EMBEDDING,
     SCORING,
     MODERATION,
+    // 生成图片的模型不是识别图片的模型
     IMAGE
     ;
 
