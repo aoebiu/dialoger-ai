@@ -49,6 +49,16 @@ public class FunctionCallController {
         return R.ok(functionCallService.list(ctx.teamId()));
     }
 
+    @GetMapping("/check/name")
+    public R checkNameExists(@RequestParam("name") String name) {
+        if (name == null || name.isBlank())
+            return R.error(FC_PARAM_INVALID);
+
+        Long memberId = StpUtil.getLoginIdAsLong();
+        ChatToolDescription existing = functionCallService.findByNameAndMemberId(name.trim(), memberId);
+        return R.ok(Map.of("exists", existing != null));
+    }
+
     @GetMapping("/{id}")
     public R getById(@PathVariable("id") Long id) {
         ChatToolDescription tool = functionCallService.findById(id);
@@ -71,7 +81,7 @@ public class FunctionCallController {
 
         Long memberId = StpUtil.getLoginIdAsLong();
         if (functionCallService.findByNameAndMemberId(request.getName().trim(), memberId) != null)
-            return R.error(FC_PARAM_INVALID);
+            return R.error(FC_NAME_DUPLICATE);
 
         return R.ok(functionCallService.create(memberId, request));
     }
